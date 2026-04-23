@@ -85,10 +85,31 @@ const RESPONSE_SELECTOR = '.font-claude-message, [data-is-streaming], [class*="p
 const PARAGRAPH_SELECTOR = 'p, h1, h2, h3, h4, h5, h6';
 const INJECTED_ATTR = 'data-thr-injected';
 
-// ── Storage stubs (implemented in Task 6) ────────────────────────────
-function convIdFromUrl() { return location.pathname.match(/\/chat\/([^/]+)/)?.[1] ?? null; }
-async function hashParagraph(text) { return 'stub'; }
-async function loadThread() { return []; }
+// ── Storage ───────────────────────────────────────────────────────────
+
+function convIdFromUrl() {
+  return location.pathname.match(/\/chat\/([^/]+)/)?.[1] ?? null;
+}
+
+async function hashParagraph(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+}
+
+function storageKey(convId, msgIdx, paragraphHash) {
+  return `threads:${convId}:${msgIdx}:${paragraphHash}`;
+}
+
+async function saveThread(convId, msgIdx, paragraphHash, turns) {
+  const key = storageKey(convId, msgIdx, paragraphHash);
+  return chrome.storage.local.set({ [key]: { paragraphHash, turns } });
+}
+
+async function loadThread(convId, msgIdx, paragraphHash) {
+  const key = storageKey(convId, msgIdx, paragraphHash);
+  const result = await chrome.storage.local.get(key);
+  return result[key]?.turns ?? [];
+}
 
 // ── Receive fetch-watcher events ──────────────────────────────────────
 window.addEventListener('message', (e) => {
