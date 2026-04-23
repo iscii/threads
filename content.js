@@ -8,7 +8,12 @@ let sidebarInputEl = null;
 let activePara = null;  // { para, paragraphIdx, responseIdx, icon, hash, hashPromise }
 
 function ensureSidebar() {
-  if (sidebarEl) return;
+  if (sidebarEl && document.body.contains(sidebarEl)) return;
+  if (sidebarEl) {
+    sidebarEl = null;
+    sidebarThreadEl = null;
+    sidebarInputEl = null;
+  }
   sidebarEl = document.createElement('div');
   sidebarEl.id = 'thr-sidebar';
   sidebarEl.innerHTML = `
@@ -39,7 +44,10 @@ function openSidebar() {
   // Dynamically nudge the chat content container
   const chatEl = document.querySelector('main, [class*="conversation"], [class*="chat-content"]');
   if (chatEl && !chatEl.dataset.thrNudged) {
-    chatEl.style.transition = 'padding-right 0.25s ease';
+    chatEl.dataset.thrPrevTransition = chatEl.style.transition;
+    chatEl.style.transition = chatEl.style.transition
+      ? chatEl.style.transition + ', padding-right 0.25s ease'
+      : 'padding-right 0.25s ease';
     chatEl.style.paddingRight = '420px';
     chatEl.dataset.thrNudged = '1';
     sidebarEl._chatEl = chatEl;
@@ -51,9 +59,12 @@ function closeSidebar() {
   sidebarEl.classList.remove('thr-open');
   if (sidebarEl._chatEl) {
     sidebarEl._chatEl.style.paddingRight = '';
+    sidebarEl._chatEl.style.transition = sidebarEl._chatEl.dataset.thrPrevTransition ?? '';
     delete sidebarEl._chatEl.dataset.thrNudged;
+    delete sidebarEl._chatEl.dataset.thrPrevTransition;
     sidebarEl._chatEl = null;
   }
+  if (sidebarThreadEl) sidebarThreadEl.innerHTML = '';
   activePara = null;
 }
 
@@ -123,31 +134,33 @@ function openThread(para, paragraphIdx, icon) {
   const responseEl = para.closest(RESPONSE_SELECTOR);
   const responseIdx = allResponses.indexOf(responseEl);
 
+  const token = {};
   const hashPromise = hashParagraph(para.textContent);
-  activePara = { para, paragraphIdx, responseIdx, icon, hash: null, hashPromise };
-  hashPromise.then(h => { if (activePara) activePara.hash = h; });
+  activePara = { para, paragraphIdx, responseIdx, icon, hash: null, hashPromise, _token: token };
+  hashPromise.then(h => { if (activePara?._token === token) activePara.hash = h; });
 
   openSidebar();
 
   const quoteText = para.textContent;
-  document.getElementById('thr-quote').textContent =
-    `"${quoteText.slice(0, 140)}${quoteText.length > 140 ? '…' : ''}"`;
+  const quoteEl = document.getElementById('thr-quote');
+  if (quoteEl) quoteEl.textContent = `"${quoteText.slice(0, 140)}${quoteText.length > 140 ? '…' : ''}"`;
 
   sidebarInputEl.value = '';
   renderThread([]);
   sidebarInputEl.focus();
 
-  // Load existing thread turns once hash resolves
   const convId = convIdFromUrl();
   hashPromise.then(async (hash) => {
+    if (activePara?._token !== token) return;
     const turns = await loadThread(convId, responseIdx, hash);
+    if (activePara?._token !== token) return;
     renderThread(turns);
   });
 }
 
 function handleSend() {
   const text = sidebarInputEl.value.trim();
-  if (!text) return;
+  if (!text || !activePara) return;
   console.log('[Thread] send (not yet wired):', text);
   sidebarInputEl.value = '';
 }
