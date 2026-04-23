@@ -188,9 +188,128 @@ function openThread(para, paragraphIdx, icon) {
   });
 }
 
-function handleSend() {
+// ── Thread API ────────────────────────────────────────────────────────
+
+function buildThreadRequest(paraText, userInput, existingTurns) {
+  if (!endpointInfo) {
+    throw new Error('No Claude.ai endpoint captured yet — send a message in the main chat first.');
+  }
+  const { url, bodyTemplate } = endpointInfo;
+  const contextTurn = `Focusing on this specific part of your response: "${paraText}"\n\n${userInput}`;
+
+  let updatedBody;
+  if (Array.isArray(bodyTemplate.messages)) {
+    // Messages API format (most likely)
+    updatedBody = {
+      ...bodyTemplate,
+      messages: [
+        ...bodyTemplate.messages,
+        ...existingTurns,
+        { role: 'user', content: contextTurn },
+      ],
+    };
+  } else if (typeof bodyTemplate.prompt === 'string') {
+    // Human/Assistant prompt format (older models)
+    const threadHistory = existingTurns.map(t =>
+      t.role === 'user' ? `\n\nHuman: ${t.content}` : `\n\nAssistant: ${t.content}`
+    ).join('');
+    updatedBody = {
+      ...bodyTemplate,
+      prompt: bodyTemplate.prompt + threadHistory + `\n\nHuman: ${contextTurn}\n\nAssistant:`,
+    };
+  } else {
+    throw new Error('Unrecognised Claude.ai request format — inspect console.log(endpointInfo.bodyTemplate)');
+  }
+
+  return { url, body: JSON.stringify(updatedBody) };
+}
+
+async function streamThreadReply(url, body, onChunk) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    credentials: 'include',
+    body,
+  });
+  if (!response.ok) throw new Error(`API ${response.status}: ${response.statusText}`);
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let accumulated = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    for (const line of decoder.decode(value, { stream: true }).split('\n')) {
+      if (!line.startsWith('data: ')) continue;
+      const payload = line.slice(6).trim();
+      if (payload === '[DONE]') continue;
+      try {
+        const parsed = JSON.parse(payload);
+        const token =
+          parsed.completion ??           // older Anthropic format
+          parsed.delta?.text ??          // messages streaming format
+          parsed.choices?.[0]?.delta?.content ?? // OpenAI-compat
+          '';
+        if (token) { accumulated += token; onChunk(accumulated); }
+      } catch (_) {}
+    }
+  }
+  return accumulated;
+}
+
+function updateBadge(icon, userTurnCount) {
+  icon.setAttribute('data-has-thread', 'true');
+  let badge = icon.querySelector('.thr-badge');
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'thr-badge';
+    icon.appendChild(badge);
+  }
+  badge.textContent = userTurnCount;
+}
+
+async function handleSend() {
   const text = sidebarInputEl.value.trim();
   if (!text || !activePara) return;
-  console.log('[Thread] send (not yet wired):', text);
+
+  const sendBtn = document.getElementById('thr-send');
+  sendBtn.disabled = true;
+  sidebarInputEl.disabled = true;
+
+  // Ensure hash is computed before proceeding
+  const hash = activePara.hash ?? await activePara.hashPromise;
+  const convId = convIdFromUrl();
+  const { para, responseIdx, icon } = activePara;
+
+  const existingTurns = await loadThread(convId, responseIdx, hash);
+  const userTurn = { role: 'user', content: text };
+
+  renderThread([...existingTurns, userTurn]);
   sidebarInputEl.value = '';
+
+  const streamingDiv = document.createElement('div');
+  streamingDiv.className = 'thr-turn thr-turn-assistant';
+  streamingDiv.textContent = '…';
+  sidebarThreadEl.appendChild(streamingDiv);
+  sidebarThreadEl.scrollTop = sidebarThreadEl.scrollHeight;
+
+  try {
+    const { url, body } = buildThreadRequest(para.textContent, text, existingTurns);
+    const finalText = await streamThreadReply(url, body, (partial) => {
+      streamingDiv.textContent = partial;
+      sidebarThreadEl.scrollTop = sidebarThreadEl.scrollHeight;
+    });
+
+    const updatedTurns = [...existingTurns, userTurn, { role: 'assistant', content: finalText }];
+    await saveThread(convId, responseIdx, hash, updatedTurns);
+    if (icon) updateBadge(icon, updatedTurns.filter(t => t.role === 'user').length);
+  } catch (err) {
+    streamingDiv.textContent = `Error: ${err.message}`;
+    streamingDiv.style.color = '#f87171';
+  } finally {
+    sendBtn.disabled = false;
+    sidebarInputEl.disabled = false;
+    sidebarInputEl.focus();
+  }
 }
