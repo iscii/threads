@@ -80,7 +80,6 @@ function renderThread(turns) {
 }
 
 // ── DOM selectors ─────────────────────────────────────────────────────
-// Update RESPONSE_SELECTOR based on Step 1 inspection results.
 const RESPONSE_SELECTOR = '.font-claude-message, [data-is-streaming], [class*="prose"]';
 const PARAGRAPH_SELECTOR = 'p, h1, h2, h3, h4, h5, h6';
 const INJECTED_ATTR = 'data-thr-injected';
@@ -180,6 +179,7 @@ function openThread(para, paragraphIdx, icon) {
   sidebarInputEl.focus();
 
   const convId = convIdFromUrl();
+  if (!convId) return;
   hashPromise.then(async (hash) => {
     if (activePara?._token !== token) return;
     const turns = await loadThread(convId, responseIdx, hash);
@@ -195,6 +195,9 @@ function buildThreadRequest(paraText, userInput, existingTurns) {
     throw new Error('No Claude.ai endpoint captured yet — send a message in the main chat first.');
   }
   const { url, bodyTemplate } = endpointInfo;
+  if (!bodyTemplate) {
+    throw new Error('No request body captured — reload the page and send a message in the main chat first.');
+  }
   const contextTurn = `Focusing on this specific part of your response: "${paraText}"\n\n${userInput}`;
 
   let updatedBody;
@@ -293,6 +296,7 @@ async function handleSend() {
   const hash = capturedPara.hash ?? await capturedPara.hashPromise;
   if (activePara !== capturedPara) { sendBtn.disabled = false; sidebarInputEl.disabled = false; return; }
   const convId = convIdFromUrl();
+  if (!convId) { sendBtn.disabled = false; sidebarInputEl.disabled = false; return; }
   const { para, responseIdx, icon } = capturedPara;
 
   const existingTurns = await loadThread(convId, responseIdx, hash);
@@ -337,51 +341,51 @@ async function handleSend() {
 
 async function restoreThreadBadges() {
   try {
-  const convId = convIdFromUrl();
-  if (!convId) return;
+    const convId = convIdFromUrl();
+    if (!convId) return;
 
-  const allKeys = await chrome.storage.local.get(null);
-  if (convIdFromUrl() !== convId) return; // navigated away during storage await
-  const prefix = `threads:${convId}:`;
-  const matching = Object.entries(allKeys).filter(([k]) => k.startsWith(prefix));
-  if (!matching.length) return;
+    const allKeys = await chrome.storage.local.get(null);
+    if (convIdFromUrl() !== convId) return; // navigated away during storage await
+    const prefix = `threads:${convId}:`;
+    const matching = Object.entries(allKeys).filter(([k]) => k.startsWith(prefix));
+    if (!matching.length) return;
 
-  // Build map: responseIdx → [{ paragraphHash, turns }]
-  const byResponse = {};
-  for (const [key, val] of matching) {
-    const rest = key.slice(prefix.length);            // "responseIdx:paragraphHash"
-    const colon = rest.indexOf(':');
-    const responseIdx = parseInt(rest.slice(0, colon), 10);
-    const paragraphHash = rest.slice(colon + 1);
-    if (!byResponse[responseIdx]) byResponse[responseIdx] = [];
-    byResponse[responseIdx].push({ paragraphHash, turns: val.turns });
-  }
-
-  const allResponses = document.querySelectorAll(RESPONSE_SELECTOR);
-
-  for (const [idxStr, threads] of Object.entries(byResponse)) {
-    const msgIdx = parseInt(idxStr, 10);
-    const responseEl = allResponses[msgIdx];
-    if (!responseEl) continue;
-
-    if (!responseEl.getAttribute(INJECTED_ATTR)) {
-      responseEl.setAttribute(INJECTED_ATTR, 'true');
-      responseEl.querySelectorAll(PARAGRAPH_SELECTOR).forEach((p, i) => injectIcon(p, i));
+    // Build map: responseIdx → [{ paragraphHash, turns }]
+    const byResponse = {};
+    for (const [key, val] of matching) {
+      const rest = key.slice(prefix.length);            // "responseIdx:paragraphHash"
+      const colon = rest.indexOf(':');
+      const responseIdx = parseInt(rest.slice(0, colon), 10);
+      const paragraphHash = rest.slice(colon + 1);
+      if (!byResponse[responseIdx]) byResponse[responseIdx] = [];
+      byResponse[responseIdx].push({ paragraphHash, turns: val.turns });
     }
 
-    const paragraphs = [...responseEl.querySelectorAll(PARAGRAPH_SELECTOR)];
+    const allResponses = document.querySelectorAll(RESPONSE_SELECTOR);
 
-    for (const { paragraphHash, turns } of threads) {
-      if (!turns?.length) continue;
-      for (let i = 0; i < paragraphs.length; i++) {
-        const h = await hashParagraph(paragraphs[i].textContent);
-        if (h !== paragraphHash) continue;
-        const icon = paragraphs[i].parentElement?.querySelector('.thr-icon');
-        if (icon) updateBadge(icon, turns.filter(t => t.role === 'user').length);
-        break;
+    for (const [idxStr, threads] of Object.entries(byResponse)) {
+      const msgIdx = parseInt(idxStr, 10);
+      const responseEl = allResponses[msgIdx];
+      if (!responseEl) continue;
+
+      if (!responseEl.getAttribute(INJECTED_ATTR)) {
+        responseEl.setAttribute(INJECTED_ATTR, 'true');
+        responseEl.querySelectorAll(PARAGRAPH_SELECTOR).forEach((p, i) => injectIcon(p, i));
+      }
+
+      const paragraphs = [...responseEl.querySelectorAll(PARAGRAPH_SELECTOR)];
+
+      for (const { paragraphHash, turns } of threads) {
+        if (!turns?.length) continue;
+        for (let i = 0; i < paragraphs.length; i++) {
+          const h = await hashParagraph(paragraphs[i].textContent);
+          if (h !== paragraphHash) continue;
+          const icon = paragraphs[i].parentElement?.querySelector('.thr-icon');
+          if (icon) updateBadge(icon, turns.filter(t => t.role === 'user').length);
+          break;
+        }
       }
     }
-  }
   } catch (err) {
     console.warn('[Thread] restoreThreadBadges failed:', err.message);
   }
