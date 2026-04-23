@@ -200,11 +200,20 @@ function buildThreadRequest(paraText, userInput, existingTurns) {
   }
   const contextTurn = `Focusing on this specific part of your response: "${paraText}"\n\n${userInput}`;
 
+  // Fresh UUIDs every call — reusing the captured ones causes 409 "already sent"
+  const freshUuids = bodyTemplate.turn_message_uuids ? {
+    turn_message_uuids: {
+      human_message_uuid: crypto.randomUUID(),
+      assistant_message_uuid: crypto.randomUUID(),
+    },
+  } : {};
+
   let updatedBody;
   if (Array.isArray(bodyTemplate.messages)) {
     // Messages API format (most likely)
     updatedBody = {
       ...bodyTemplate,
+      ...freshUuids,
       messages: [
         ...bodyTemplate.messages,
         ...existingTurns,
@@ -218,6 +227,7 @@ function buildThreadRequest(paraText, userInput, existingTurns) {
     ).join('');
     updatedBody = {
       ...bodyTemplate,
+      ...freshUuids,
       prompt: bodyTemplate.prompt + threadHistory + `\n\nHuman: ${contextTurn}\n\nAssistant:`,
     };
   } else {
