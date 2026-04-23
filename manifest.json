@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Thread",
+  "version": "0.1.0",
+  "description": "Inline reply threads for Claude.ai responses",
+  "permissions": ["storage"],
+  "host_permissions": ["https://claude.ai/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["fetch-watcher.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["content.js"],
+      "css": ["sidebar.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "48": "icons/icon-48.png"
+  }
+}
