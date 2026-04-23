@@ -332,3 +332,65 @@ async function handleSend() {
     sidebarInputEl.focus();
   }
 }
+
+// ── Persistence & SPA navigation ─────────────────────────────────────
+
+async function restoreThreadBadges() {
+  const convId = convIdFromUrl();
+  if (!convId) return;
+
+  const allKeys = await chrome.storage.local.get(null);
+  const prefix = `threads:${convId}:`;
+  const matching = Object.entries(allKeys).filter(([k]) => k.startsWith(prefix));
+  if (!matching.length) return;
+
+  // Build map: responseIdx → [{ paragraphHash, turns }]
+  const byResponse = {};
+  for (const [key, val] of matching) {
+    const rest = key.slice(prefix.length);            // "responseIdx:paragraphHash"
+    const colon = rest.indexOf(':');
+    const responseIdx = parseInt(rest.slice(0, colon), 10);
+    const paragraphHash = rest.slice(colon + 1);
+    if (!byResponse[responseIdx]) byResponse[responseIdx] = [];
+    byResponse[responseIdx].push({ paragraphHash, turns: val.turns });
+  }
+
+  const allResponses = document.querySelectorAll(RESPONSE_SELECTOR);
+
+  for (const [idxStr, threads] of Object.entries(byResponse)) {
+    const msgIdx = parseInt(idxStr, 10);
+    const responseEl = allResponses[msgIdx];
+    if (!responseEl) continue;
+
+    if (!responseEl.getAttribute(INJECTED_ATTR)) {
+      responseEl.setAttribute(INJECTED_ATTR, 'true');
+      responseEl.querySelectorAll(PARAGRAPH_SELECTOR).forEach((p, i) => injectIcon(p, i));
+    }
+
+    const paragraphs = [...responseEl.querySelectorAll(PARAGRAPH_SELECTOR)];
+
+    for (const { paragraphHash, turns } of threads) {
+      if (!turns?.length) continue;
+      for (let i = 0; i < paragraphs.length; i++) {
+        const h = await hashParagraph(paragraphs[i].textContent);
+        if (h !== paragraphHash) continue;
+        const icon = paragraphs[i].parentElement?.querySelector('.thr-icon');
+        if (icon) updateBadge(icon, turns.filter(t => t.role === 'user').length);
+        break;
+      }
+    }
+  }
+}
+
+// SPA navigation watcher
+let lastPathname = location.pathname;
+new MutationObserver(() => {
+  if (location.pathname === lastPathname) return;
+  lastPathname = location.pathname;
+  endpointInfo = null;
+  closeSidebar();
+  setTimeout(restoreThreadBadges, 500);
+}).observe(document.body, { childList: true, subtree: false });
+
+// Initial load
+restoreThreadBadges();
