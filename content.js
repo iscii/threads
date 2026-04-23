@@ -102,13 +102,22 @@ function storageKey(convId, msgIdx, paragraphHash) {
 
 async function saveThread(convId, msgIdx, paragraphHash, turns) {
   const key = storageKey(convId, msgIdx, paragraphHash);
-  return chrome.storage.local.set({ [key]: { paragraphHash, turns } });
+  try {
+    await chrome.storage.local.set({ [key]: { paragraphHash, turns } });
+  } catch (err) {
+    console.warn('[Thread] storage write failed:', err.message);
+  }
 }
 
 async function loadThread(convId, msgIdx, paragraphHash) {
   const key = storageKey(convId, msgIdx, paragraphHash);
-  const result = await chrome.storage.local.get(key);
-  return result[key]?.turns ?? [];
+  try {
+    const result = await chrome.storage.local.get(key);
+    return result[key]?.turns ?? [];
+  } catch (err) {
+    console.warn('[Thread] storage read failed:', err.message);
+    return [];
+  }
 }
 
 // ── Receive fetch-watcher events ──────────────────────────────────────
