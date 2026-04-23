@@ -336,10 +336,12 @@ async function handleSend() {
 // ── Persistence & SPA navigation ─────────────────────────────────────
 
 async function restoreThreadBadges() {
+  try {
   const convId = convIdFromUrl();
   if (!convId) return;
 
   const allKeys = await chrome.storage.local.get(null);
+  if (convIdFromUrl() !== convId) return; // navigated away during storage await
   const prefix = `threads:${convId}:`;
   const matching = Object.entries(allKeys).filter(([k]) => k.startsWith(prefix));
   if (!matching.length) return;
@@ -380,17 +382,32 @@ async function restoreThreadBadges() {
       }
     }
   }
+  } catch (err) {
+    console.warn('[Thread] restoreThreadBadges failed:', err.message);
+  }
 }
 
-// SPA navigation watcher
+// SPA navigation watcher — patches history API for reliable pushState/replaceState detection
 let lastPathname = location.pathname;
-new MutationObserver(() => {
+let restoreTimerId = null;
+
+function onNavigation() {
   if (location.pathname === lastPathname) return;
   lastPathname = location.pathname;
   endpointInfo = null;
   closeSidebar();
-  setTimeout(restoreThreadBadges, 500);
-}).observe(document.body, { childList: true, subtree: false });
+  clearTimeout(restoreTimerId);
+  restoreTimerId = setTimeout(restoreThreadBadges, 500);
+}
+
+['pushState', 'replaceState'].forEach(method => {
+  const orig = history[method].bind(history);
+  history[method] = function (...args) {
+    orig(...args);
+    onNavigation();
+  };
+});
+window.addEventListener('popstate', onNavigation);
 
 // Initial load
 restoreThreadBadges();
