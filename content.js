@@ -236,24 +236,35 @@ async function streamThreadReply(url, body, onChunk) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let accumulated = '';
+  let buffer = '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    for (const line of decoder.decode(value, { stream: true }).split('\n')) {
-      if (!line.startsWith('data: ')) continue;
-      const payload = line.slice(6).trim();
-      if (payload === '[DONE]') continue;
-      try {
-        const parsed = JSON.parse(payload);
-        const token =
-          parsed.completion ??           // older Anthropic format
-          parsed.delta?.text ??          // messages streaming format
-          parsed.choices?.[0]?.delta?.content ?? // OpenAI-compat
-          '';
-        if (token) { accumulated += token; onChunk(accumulated); }
-      } catch (_) {}
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // last element may be an incomplete line
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const payload = line.slice(6).trim();
+        if (payload === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(payload);
+          const token =
+            parsed.completion ??           // older Anthropic format
+            parsed.delta?.text ??          // messages streaming format
+            parsed.choices?.[0]?.delta?.content ?? // OpenAI-compat
+            '';
+          if (token) { accumulated += token; onChunk(accumulated); }
+        } catch (_) {}
+      }
     }
+  } catch (err) {
+    reader.cancel();
+    throw err;
+  } finally {
+    reader.releaseLock();
   }
   return accumulated;
 }
@@ -277,10 +288,12 @@ async function handleSend() {
   sendBtn.disabled = true;
   sidebarInputEl.disabled = true;
 
-  // Ensure hash is computed before proceeding
-  const hash = activePara.hash ?? await activePara.hashPromise;
+  // Snapshot activePara before any await — closeSidebar() may null it during suspension
+  const capturedPara = activePara;
+  const hash = capturedPara.hash ?? await capturedPara.hashPromise;
+  if (activePara !== capturedPara) { sendBtn.disabled = false; sidebarInputEl.disabled = false; return; }
   const convId = convIdFromUrl();
-  const { para, responseIdx, icon } = activePara;
+  const { para, responseIdx, icon } = capturedPara;
 
   const existingTurns = await loadThread(convId, responseIdx, hash);
   const userTurn = { role: 'user', content: text };
@@ -301,9 +314,15 @@ async function handleSend() {
       sidebarThreadEl.scrollTop = sidebarThreadEl.scrollHeight;
     });
 
-    const updatedTurns = [...existingTurns, userTurn, { role: 'assistant', content: finalText }];
-    await saveThread(convId, responseIdx, hash, updatedTurns);
-    if (icon) updateBadge(icon, updatedTurns.filter(t => t.role === 'user').length);
+    if (finalText) {
+      const updatedTurns = [...existingTurns, userTurn, { role: 'assistant', content: finalText }];
+      await saveThread(convId, responseIdx, hash, updatedTurns);
+      if (icon) updateBadge(icon, updatedTurns.filter(t => t.role === 'user').length);
+      streamingDiv.textContent = finalText;
+    } else {
+      streamingDiv.textContent = 'Error: empty response from API';
+      streamingDiv.style.color = '#f87171';
+    }
   } catch (err) {
     streamingDiv.textContent = `Error: ${err.message}`;
     streamingDiv.style.color = '#f87171';
