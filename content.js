@@ -84,6 +84,38 @@ const RESPONSE_SELECTOR = '.font-claude-message, [data-is-streaming], [class*="p
 const PARAGRAPH_SELECTOR = 'p, h1, h2, h3, h4, h5, h6';
 const INJECTED_ATTR = 'data-thr-injected';
 
+// ── Summary utilities ─────────────────────────────────────────────────
+
+function isDirtyThread(turns, excluded, highWaterMark, key) {
+  if (excluded) return false;
+  return turns.length > (highWaterMark[key] ?? 0);
+}
+
+function getDirtyTurns(turns, highWaterMark, key) {
+  return turns.slice(highWaterMark[key] ?? 0);
+}
+
+function getParagraphSnippet(turns) {
+  const firstUserContent = turns.find(t => t.role === 'user')?.content ?? '';
+  const match = firstUserContent.match(/^Focusing on this specific part of your response: "([^"]{1,120})/);
+  return match ? match[1] : firstUserContent.slice(0, 120);
+}
+
+function buildSummaryPrompt(dirtyItems) {
+  const blocks = dirtyItems.map(({ paragraphSnippet, newTurns }) => {
+    const lines = newTurns.map(t => `${t.role === 'user' ? 'Q' : 'A'}: ${t.content}`);
+    return `Thread on: "${paragraphSnippet}"\nNew exchanges:\n${lines.join('\n')}`;
+  }).join('\n\n');
+  return [
+    'Summarize the following thread exchanges from a Claude.ai conversation sidebar.',
+    'Each thread is a follow-up question the user asked about a specific paragraph.',
+    'For each thread, write one sentence in the format: "on [topic keyword], [summary]."',
+    'Output only the sentences, no preamble.',
+    '',
+    blocks,
+  ].join('\n');
+}
+
 // ── Storage ───────────────────────────────────────────────────────────
 
 function convIdFromUrl() {
