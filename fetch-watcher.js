@@ -25,6 +25,7 @@
 
       // Inject staged summaries if present
       let modifiedInit = init;
+      let injected = false;
       if (stagedSummaries.length > 0 && bodyTemplate) {
         const contextPrefix = stagedSummaries.join('\n') + '\n\n';
         const freshUuids = bodyTemplate.turn_message_uuids ? {
@@ -34,14 +35,17 @@
           },
         } : {};
 
-        let updatedBody;
+        let updatedBody = null;
         if (Array.isArray(bodyTemplate.messages)) {
           const msgs = [...bodyTemplate.messages];
           const lastUserIdx = msgs.map(m => m.role).lastIndexOf('user');
-          if (lastUserIdx !== -1) {
+          if (lastUserIdx === -1) {
+            console.warn('[Thread] No user message found — skipping summary injection');
+            // injected stays false, stagedSummaries not cleared
+          } else {
             msgs[lastUserIdx] = { ...msgs[lastUserIdx], content: contextPrefix + msgs[lastUserIdx].content };
+            updatedBody = { ...bodyTemplate, ...freshUuids, messages: msgs };
           }
-          updatedBody = { ...bodyTemplate, ...freshUuids, messages: msgs };
         } else if (typeof bodyTemplate.prompt === 'string') {
           const marker = '\n\nHuman: ';
           const lastHuman = bodyTemplate.prompt.lastIndexOf(marker);
@@ -51,15 +55,18 @@
                 bodyTemplate.prompt.slice(lastHuman + marker.length) }
             : { ...bodyTemplate, ...freshUuids };
         } else {
-          updatedBody = { ...bodyTemplate, ...freshUuids };
+          updatedBody = null;
         }
 
-        modifiedInit = { ...init, body: JSON.stringify(updatedBody) };
-        stagedSummaries = [];
-        window.postMessage({ type: 'THR_SUMMARY_INJECTED' }, location.origin);
+        if (updatedBody !== null) {
+          modifiedInit = { ...init, body: JSON.stringify(updatedBody) };
+          stagedSummaries = [];
+          injected = true;
+        }
       }
 
       const response = await _fetch.call(this, input, modifiedInit);
+      if (injected) window.postMessage({ type: 'THR_SUMMARY_INJECTED' }, location.origin);
       const [s1, s2] = response.body.tee();
 
       (async () => {
