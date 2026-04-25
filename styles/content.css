@@ -1,0 +1,208 @@
+/* ============================================================
+   Claude Inline Reply — content.css
+   All classes namespaced under .cir-* to avoid collisions.
+   ============================================================ */
+
+/* --- Block wrapper ----------------------------------------- */
+.cir-block-wrapper {
+  position: relative;
+}
+
+.cir-block-active {
+  border-left: 2px solid #6366f1;
+  padding-left: 10px;
+  margin-left: -12px;
+  transition: border-color 0.15s ease;
+}
+
+/* --- Hover icon -------------------------------------------- */
+.cir-icon {
+  position: absolute;
+  top: 2px;
+  right: -28px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  color: #9ca3af;
+
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.cir-block-wrapper:hover .cir-icon {
+  opacity: 1;
+}
+
+.cir-icon:hover {
+  background: #f3f4f6;
+  color: #6366f1;
+}
+
+@media (prefers-color-scheme: dark) {
+  .cir-icon:hover {
+    background: #1f2937;
+    color: #818cf8;
+  }
+  .cir-block-active {
+    border-color: #818cf8;
+  }
+}
+
+.cir-collapse-toggle {
+  display: block;
+  width: 100%;
+  padding: 4px 8px;
+  margin-bottom: 4px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 11px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.cir-collapse-toggle:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.cir-block-wrapper pre {
+  transition: max-height 0.2s ease, margin-top 0.2s ease;
+}
+
+.cir-code-collapsed .cir-collapse-toggle {
+  margin-bottom: 0;
+  border-color: #d1d5db;
+}
+
+@media (prefers-color-scheme: dark) {
+  .cir-collapse-toggle {
+    background: #1f2937;
+    border-color: #374151;
+    color: #9ca3af;
+  }
+  .cir-collapse-toggle:hover {
+    background: #374151;
+    color: #d1d5db;
+  }
+}
+
+/* --- Popover ---------------------------------------------- */
+.cir-popover {
+  position: absolute;
+  z-index: 9999;
+
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+
+  max-width: 640px;
+  min-width: 280px;
+}
+
+.cir-popover.cir-popover-visible {
+  display: flex;
+}
+
+.cir-popover-excerpt {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #6b7280;
+  border-left: 3px solid #6366f1;
+  padding-left: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cir-popover-input {
+  width: 100%;
+  resize: none;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.5;
+  color: #111827;
+  background: #f9fafb;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+
+.cir-popover-input:focus {
+  border-color: #6366f1;
+  background: #ffffff;
+}
+
+.cir-popover-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cir-popover-hint {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.cir-popover-send {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: none;
+  background: #6366f1;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.cir-popover-send:hover {
+  background: #4f46e5;
+}
+
+@media (prefers-color-scheme: dark) {
+  .cir-popover {
+    background: #1f2937;
+    border-color: #374151;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  }
+
+  .cir-popover-excerpt {
+    color: #9ca3af;
+    border-color: #818cf8;
+  }
+
+  .cir-popover-input {
+    background: #111827;
+    border-color: #374151;
+    color: #f9fafb;
+  }
+
+  .cir-popover-input:focus {
+    border-color: #818cf8;
+    background: #1f2937;
+  }
+
+  .cir-popover-hint {
+    color: #6b7280;
+  }
+}
