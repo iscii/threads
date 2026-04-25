@@ -120,12 +120,21 @@ function buildSummaryPrompt(dirtyItems) {
 
 async function loadSummaryData(convId) {
   const key = `summary:${convId}`;
-  const result = await chrome.storage.local.get(key);
-  return result[key] ?? { highWaterMark: {}, queue: [] };
+  try {
+    const result = await chrome.storage.local.get(key);
+    return result[key] ?? { highWaterMark: {}, queue: [] };
+  } catch (err) {
+    console.warn('[Thread] summary storage read failed:', err.message);
+    return { highWaterMark: {}, queue: [] };
+  }
 }
 
 async function saveSummaryData(convId, data) {
-  await chrome.storage.local.set({ [`summary:${convId}`]: data });
+  try {
+    await chrome.storage.local.set({ [`summary:${convId}`]: data });
+  } catch (err) {
+    console.warn('[Thread] summary storage write failed:', err.message);
+  }
 }
 
 // ── Storage ───────────────────────────────────────────────────────────
