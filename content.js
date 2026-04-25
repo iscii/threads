@@ -196,13 +196,15 @@ function buildSummaryRequest(promptText) {
       model: 'claude-haiku-4-5-20251001',
       messages: [{ role: 'user', content: promptText }],
     };
-  } else {
+  } else if (typeof bodyTemplate.prompt === 'string') {
     body = {
       ...bodyTemplate,
       ...freshUuids,
       model: 'claude-haiku-4-5-20251001',
       prompt: `\n\nHuman: ${promptText}\n\nAssistant:`,
     };
+  } else {
+    throw new Error('Unrecognised body format');
   }
   return { url, body: JSON.stringify(body) };
 }
@@ -218,14 +220,15 @@ async function runSummarization(convId, dirtyThreads, summaryData) {
     return { paragraphSnippet: getParagraphSnippet(t.turns ?? []), newTurns };
   });
 
-  await saveSummaryData(convId, { ...summaryData, highWaterMark: updatedHwm });
-
   try {
+    await saveSummaryData(convId, { ...summaryData, highWaterMark: updatedHwm });
+
     const prompt = buildSummaryPrompt(dirtyItems);
     const req = buildSummaryRequest(prompt);
     if (!req) throw new Error('No endpoint available');
 
     const summaryText = await streamThreadReply(req.url, req.body, () => {});
+    if (!summaryText.trim()) throw new Error('Empty summary response');
 
     // Reload in case storage changed while we awaited (e.g. another tab)
     const latestData = await loadSummaryData(convId);
@@ -677,6 +680,13 @@ async function restoreThreadBadges() {
           break;
         }
       }
+    }
+    // Restore badge state if queue exists for this conversation
+    const convId = convIdFromUrl();
+    if (convId) {
+      loadSummaryData(convId).then(data => {
+        if (data.queue.length > 0) setBadgeState(BADGE_STATES.READY);
+      }).catch(() => {});
     }
   } catch (err) {
     console.warn('[Thread] restoreThreadBadges failed:', err.message);
