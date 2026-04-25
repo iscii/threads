@@ -116,6 +116,18 @@ function buildSummaryPrompt(dirtyItems) {
   ].join('\n');
 }
 
+// ── Summary storage ───────────────────────────────────────────────────────
+
+async function loadSummaryData(convId) {
+  const key = `summary:${convId}`;
+  const result = await chrome.storage.local.get(key);
+  return result[key] ?? { highWaterMark: {}, queue: [] };
+}
+
+async function saveSummaryData(convId, data) {
+  await chrome.storage.local.set({ [`summary:${convId}`]: data });
+}
+
 // ── Storage ───────────────────────────────────────────────────────────
 
 function convIdFromUrl() {
@@ -134,7 +146,8 @@ function storageKey(convId, msgIdx, paragraphHash) {
 async function saveThread(convId, msgIdx, paragraphHash, turns) {
   const key = storageKey(convId, msgIdx, paragraphHash);
   try {
-    await chrome.storage.local.set({ [key]: { paragraphHash, turns } });
+    const existing = (await chrome.storage.local.get(key))[key] ?? {};
+    await chrome.storage.local.set({ [key]: { ...existing, paragraphHash, turns } });
   } catch (err) {
     console.warn('[Thread] storage write failed:', err.message);
   }
