@@ -25,7 +25,9 @@
   "type": "module",
   "main": "build.js",
   "scripts": {
-    "test": "test"
+    "build": "node build.js",
+    "watch": "node build.js --watch",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "esbuild": "^0.28.0"
