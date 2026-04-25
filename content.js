@@ -691,7 +691,6 @@ async function restoreThreadBadges() {
       }
     }
     // Restore badge state if queue exists for this conversation
-    const convId = convIdFromUrl();
     if (convId) {
       loadSummaryData(convId).then(data => {
         if (data.queue.length > 0) setBadgeState(BADGE_STATES.READY);

@@ -43,7 +43,11 @@
             console.warn('[Thread] No user message found — skipping summary injection');
             // injected stays false, stagedSummaries not cleared
           } else {
-            msgs[lastUserIdx] = { ...msgs[lastUserIdx], content: contextPrefix + msgs[lastUserIdx].content };
+            const orig = msgs[lastUserIdx].content;
+            const newContent = Array.isArray(orig)
+              ? [{ type: 'text', text: contextPrefix }, ...orig]
+              : contextPrefix + orig;
+            msgs[lastUserIdx] = { ...msgs[lastUserIdx], content: newContent };
             updatedBody = { ...bodyTemplate, ...freshUuids, messages: msgs };
           }
         } else if (typeof bodyTemplate.prompt === 'string') {
@@ -53,7 +57,7 @@
             ? { ...bodyTemplate, ...freshUuids, prompt:
                 bodyTemplate.prompt.slice(0, lastHuman) + marker + contextPrefix +
                 bodyTemplate.prompt.slice(lastHuman + marker.length) }
-            : { ...bodyTemplate, ...freshUuids };
+            : null;
         } else {
           updatedBody = null;
         }
