@@ -129,6 +129,190 @@ function buildSummaryPrompt(dirtyItems) {
   ].join('\n');
 }
 
+// ── Context badge ─────────────────────────────────────────────────────
+
+const BADGE_STATES = {
+  HIDDEN: 'hidden',
+  SUMMARIZING: 'summarizing',
+  READY: 'ready',
+  READY_SUMMARIZING: 'ready-summarizing',
+  FAILED: 'failed',
+  NO_ENDPOINT: 'no-endpoint',
+};
+
+function ensureBadge() {
+  const existing = document.getElementById('thr-ctx-badge');
+  if (existing && document.body.contains(existing)) return;
+  const container = document.querySelector('div[enterkeyhint="enter"]')?.parentElement;
+  if (!container) return;
+  const badge = document.createElement('div');
+  badge.id = 'thr-ctx-badge';
+  badge.dataset.state = BADGE_STATES.HIDDEN;
+  badge.style.display = 'none';
+  container.appendChild(badge);
+}
+
+function setBadgeState(state) {
+  ensureBadge();
+  const badge = document.getElementById('thr-ctx-badge');
+  if (!badge) return;
+  badge.dataset.state = state;
+
+  const configs = {
+    [BADGE_STATES.HIDDEN]:            { text: '',                                               visible: false },
+    [BADGE_STATES.SUMMARIZING]:       { text: '⟳ Summarizing threads…',                       visible: true  },
+    [BADGE_STATES.READY]:             { text: '✓ Thread context ready',                        visible: true  },
+    [BADGE_STATES.READY_SUMMARIZING]: { text: '✓ Thread context ready',                        visible: true, title: 'New thread activity being summarized' },
+    [BADGE_STATES.FAILED]:            { text: '⚠ Summarization failed',                        visible: true  },
+    [BADGE_STATES.NO_ENDPOINT]:       { text: 'Send a message first to enable thread context', visible: true  },
+  };
+
+  const cfg = configs[state] ?? configs[BADGE_STATES.HIDDEN];
+  badge.style.display = cfg.visible ? '' : 'none';
+  badge.textContent = cfg.text;
+  badge.title = cfg.title ?? '';
+}
+
+// ── Summarization ─────────────────────────────────────────────────────
+
+let summarizationInFlight = false;
+let inputDebounceTimer = null;
+
+function buildSummaryRequest(promptText) {
+  if (!endpointInfo?.bodyTemplate) return null;
+  const { url, bodyTemplate } = endpointInfo;
+  const freshUuids = bodyTemplate.turn_message_uuids ? {
+    turn_message_uuids: {
+      human_message_uuid: crypto.randomUUID(),
+      assistant_message_uuid: crypto.randomUUID(),
+    },
+  } : {};
+
+  let body;
+  if (Array.isArray(bodyTemplate.messages)) {
+    body = {
+      ...bodyTemplate,
+      ...freshUuids,
+      model: 'claude-haiku-4-5-20251001',
+      messages: [{ role: 'user', content: promptText }],
+    };
+  } else {
+    body = {
+      ...bodyTemplate,
+      ...freshUuids,
+      model: 'claude-haiku-4-5-20251001',
+      prompt: `\n\nHuman: ${promptText}\n\nAssistant:`,
+    };
+  }
+  return { url, body: JSON.stringify(body) };
+}
+
+async function runSummarization(convId, dirtyThreads, summaryData) {
+  summarizationInFlight = true;
+
+  // Advance highWaterMark before firing — prevents re-queuing same turns on next keystroke
+  const updatedHwm = { ...summaryData.highWaterMark };
+  const dirtyItems = dirtyThreads.map(t => {
+    const newTurns = getDirtyTurns(t.turns ?? [], summaryData.highWaterMark, t.key);
+    updatedHwm[t.key] = (t.turns ?? []).length;
+    return { paragraphSnippet: getParagraphSnippet(t.turns ?? []), newTurns };
+  });
+
+  await saveSummaryData(convId, { ...summaryData, highWaterMark: updatedHwm });
+
+  try {
+    const prompt = buildSummaryPrompt(dirtyItems);
+    const req = buildSummaryRequest(prompt);
+    if (!req) throw new Error('No endpoint available');
+
+    const summaryText = await streamThreadReply(req.url, req.body, () => {});
+
+    // Reload in case storage changed while we awaited (e.g. another tab)
+    const latestData = await loadSummaryData(convId);
+    const queueItem = {
+      text: summaryText.trim(),
+      coveredTurnCounts: Object.fromEntries(
+        dirtyThreads.map(t => [t.key, (t.turns ?? []).length])
+      ),
+      generatedAt: Date.now(),
+    };
+    const updatedData = {
+      highWaterMark: { ...latestData.highWaterMark, ...updatedHwm },
+      queue: [...latestData.queue, queueItem],
+    };
+    await saveSummaryData(convId, updatedData);
+
+    if (convIdFromUrl() === convId) {
+      window.postMessage(
+        { type: 'THR_STAGE_SUMMARY', summaryTexts: updatedData.queue.map(q => q.text) },
+        location.origin
+      );
+      setBadgeState(BADGE_STATES.READY);
+    }
+  } catch (err) {
+    console.warn('[Thread] summarization failed:', err.message);
+    if (convIdFromUrl() === convId) setBadgeState(BADGE_STATES.FAILED);
+  } finally {
+    summarizationInFlight = false;
+  }
+}
+
+async function handleMainInputDebounced() {
+  const convId = convIdFromUrl();
+  if (!convId) return;
+
+  if (!endpointInfo) {
+    setBadgeState(BADGE_STATES.NO_ENDPOINT);
+    return;
+  }
+
+  let summaryData, allStorage;
+  try {
+    [summaryData, allStorage] = await Promise.all([
+      loadSummaryData(convId),
+      chrome.storage.local.get(null),
+    ]);
+  } catch (_) { return; }
+
+  const prefix = `threads:${convId}:`;
+  const threads = Object.entries(allStorage)
+    .filter(([k]) => k.startsWith(prefix))
+    .map(([k, v]) => ({ key: k, ...(v ?? {}) }));
+
+  const dirtyThreads = threads.filter(t =>
+    isDirtyThread(t.turns ?? [], t.excluded ?? false, summaryData.highWaterMark, t.key)
+  );
+
+  const hasQueue = summaryData.queue.length > 0;
+
+  if (hasQueue) {
+    window.postMessage(
+      { type: 'THR_STAGE_SUMMARY', summaryTexts: summaryData.queue.map(q => q.text) },
+      location.origin
+    );
+  }
+
+  if (dirtyThreads.length === 0) {
+    setBadgeState(hasQueue ? BADGE_STATES.READY : BADGE_STATES.HIDDEN);
+    return;
+  }
+
+  if (summarizationInFlight) {
+    setBadgeState(hasQueue ? BADGE_STATES.READY_SUMMARIZING : BADGE_STATES.SUMMARIZING);
+    return;
+  }
+
+  setBadgeState(hasQueue ? BADGE_STATES.READY_SUMMARIZING : BADGE_STATES.SUMMARIZING);
+  runSummarization(convId, dirtyThreads, summaryData);
+}
+
+document.addEventListener('input', (e) => {
+  const compose = document.querySelector('div[enterkeyhint="enter"]');
+  if (!compose || !compose.contains(e.target)) return;
+  clearTimeout(inputDebounceTimer);
+  inputDebounceTimer = setTimeout(handleMainInputDebounced, 300);
+});
+
 // ── Summary storage ───────────────────────────────────────────────────────
 
 async function loadSummaryData(convId) {
@@ -507,6 +691,9 @@ function onNavigation() {
   if (location.pathname === lastPathname) return;
   lastPathname = location.pathname;
   endpointInfo = null;
+  summarizationInFlight = false;
+  clearTimeout(inputDebounceTimer);
+  setBadgeState(BADGE_STATES.HIDDEN);
   closeSidebar();
   clearTimeout(restoreTimerId);
   restoreTimerId = setTimeout(restoreThreadBadges, 500);
