@@ -1,0 +1,36 @@
+{
+  "name": "threads",
+  "version": "1.0.0",
+  "description": "an extension that adds thread capabilities to your Claude or ChatGPT chat stream",
+  "keywords": [
+    "threads",
+    "thread",
+    "chatbot",
+    "llm",
+    "reply",
+    "comment",
+    "sidebar",
+    "chat"
+  ],
+  "homepage": "https://github.com/iscii/threads#readme",
+  "bugs": {
+    "url": "https://github.com/iscii/threads/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iscii/threads.git"
+  },
+  "license": "ISC",
+  "author": "iscii",
+  "type": "module",
+  "main": "build.js",
+  "scripts": {
+    "test": "test"
+  },
+  "dependencies": {
+    "esbuild": "^0.28.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}
