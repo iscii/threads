@@ -27,7 +27,7 @@ function ensureSidebar() {
       <textarea id="thr-input" placeholder="Reply to this paragraph… (Ctrl+Enter to send)" rows="3"></textarea>
       <button id="thr-send">Send</button>
     </div>
-    <button id="thr-exclude-btn" title="Toggle thread exclusion from context">
+    <button id="thr-exclude-btn">
       <span id="thr-summary-icon">◷</span>
     </button>
   `;
@@ -36,11 +36,13 @@ function ensureSidebar() {
   document.getElementById('thr-send').addEventListener('click', handleSend);
   document.getElementById('thr-exclude-btn').addEventListener('click', async () => {
     if (!activePara) return;
+    const capturedPara = activePara;
     const convId = convIdFromUrl();
     if (!convId) return;
-    const hash = activePara.hash ?? await activePara.hashPromise;
-    await toggleExclusion(convId, activePara.responseIdx, hash);
-    updateSummaryIcon(convId, activePara.responseIdx, hash);
+    const hash = capturedPara.hash ?? await capturedPara.hashPromise;
+    if (!activePara) return;
+    await toggleExclusion(convId, capturedPara.responseIdx, hash);
+    updateSummaryIcon(convId, capturedPara.responseIdx, hash);
   });
   sidebarThreadEl = document.getElementById('thr-thread');
   sidebarInputEl = document.getElementById('thr-input');
@@ -173,6 +175,8 @@ async function updateSummaryIcon(convId, msgIdx, paragraphHash) {
     icon.textContent = '◷';
     icon.title = 'Pending summarization (click to exclude)';
   }
+  const btn = document.getElementById('thr-exclude-btn');
+  if (btn) btn.title = icon.title;
 }
 
 // ── Storage ───────────────────────────────────────────────────────────

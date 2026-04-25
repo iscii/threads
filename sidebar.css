@@ -149,9 +149,7 @@
 
 /* Thread summary state icon */
 #thr-exclude-btn {
-  position: absolute;
-  bottom: 8px;
-  left: 8px;
+  align-self: flex-start;
   background: none;
   border: none;
   cursor: pointer;
@@ -159,6 +157,7 @@
   opacity: 0.5;
   padding: 2px 4px;
   border-radius: 3px;
+  margin: 4px 0 4px 8px;
   transition: opacity 0.15s;
 }
 
