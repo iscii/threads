@@ -1,6 +1,14 @@
 (function () {
   const COMPLETION_RE = /\/api\/organizations\/[^/]+\/chat_conversations\/[^/]+\/completion/;
   const _fetch = window.fetch;
+  let stagedSummaries = [];
+
+  window.addEventListener('message', (e) => {
+    if (e.source !== window) return;
+    if (e.data?.type === 'THR_STAGE_SUMMARY') {
+      stagedSummaries = e.data.summaryTexts ?? [];
+    }
+  });
 
   window.fetch = async function (input, init = {}) {
     const url = typeof input === 'string' ? input
@@ -12,10 +20,46 @@
       let bodyTemplate = null;
       try { bodyTemplate = JSON.parse(init.body); } catch (_) {}
 
+      // Post original body as template (before summary injection)
       window.postMessage({ type: 'THR_ENDPOINT_CAPTURED', url, bodyTemplate }, location.origin);
 
-      // Call original fetch and tee the response stream to detect completion
-      const response = await _fetch.apply(this, arguments);
+      // Inject staged summaries if present
+      let modifiedInit = init;
+      if (stagedSummaries.length > 0 && bodyTemplate) {
+        const contextPrefix = stagedSummaries.join('\n') + '\n\n';
+        const freshUuids = bodyTemplate.turn_message_uuids ? {
+          turn_message_uuids: {
+            human_message_uuid: crypto.randomUUID(),
+            assistant_message_uuid: crypto.randomUUID(),
+          },
+        } : {};
+
+        let updatedBody;
+        if (Array.isArray(bodyTemplate.messages)) {
+          const msgs = [...bodyTemplate.messages];
+          const lastUserIdx = msgs.map(m => m.role).lastIndexOf('user');
+          if (lastUserIdx !== -1) {
+            msgs[lastUserIdx] = { ...msgs[lastUserIdx], content: contextPrefix + msgs[lastUserIdx].content };
+          }
+          updatedBody = { ...bodyTemplate, ...freshUuids, messages: msgs };
+        } else if (typeof bodyTemplate.prompt === 'string') {
+          const marker = '\n\nHuman: ';
+          const lastHuman = bodyTemplate.prompt.lastIndexOf(marker);
+          updatedBody = lastHuman !== -1
+            ? { ...bodyTemplate, ...freshUuids, prompt:
+                bodyTemplate.prompt.slice(0, lastHuman) + marker + contextPrefix +
+                bodyTemplate.prompt.slice(lastHuman + marker.length) }
+            : { ...bodyTemplate, ...freshUuids };
+        } else {
+          updatedBody = { ...bodyTemplate, ...freshUuids };
+        }
+
+        modifiedInit = { ...init, body: JSON.stringify(updatedBody) };
+        stagedSummaries = [];
+        window.postMessage({ type: 'THR_SUMMARY_INJECTED' }, location.origin);
+      }
+
+      const response = await _fetch.call(this, input, modifiedInit);
       const [s1, s2] = response.body.tee();
 
       (async () => {

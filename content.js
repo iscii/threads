@@ -413,6 +413,15 @@ window.addEventListener('message', (e) => {
   if (e.data.type === 'THR_STREAM_COMPLETE') {
     setTimeout(processNewResponse, 150);
   }
+  if (e.data.type === 'THR_SUMMARY_INJECTED') {
+    const convId = convIdFromUrl();
+    if (convId) {
+      loadSummaryData(convId).then(data =>
+        saveSummaryData(convId, { ...data, queue: [] })
+      );
+    }
+    setBadgeState(BADGE_STATES.HIDDEN);
+  }
 });
 
 // ── Paragraph icon injection ──────────────────────────────────────────
