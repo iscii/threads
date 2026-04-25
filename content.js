@@ -27,10 +27,21 @@ function ensureSidebar() {
       <textarea id="thr-input" placeholder="Reply to this paragraph… (Ctrl+Enter to send)" rows="3"></textarea>
       <button id="thr-send">Send</button>
     </div>
+    <button id="thr-exclude-btn" title="Toggle thread exclusion from context">
+      <span id="thr-summary-icon">◷</span>
+    </button>
   `;
   document.body.appendChild(sidebarEl);
   document.getElementById('thr-close').addEventListener('click', closeSidebar);
   document.getElementById('thr-send').addEventListener('click', handleSend);
+  document.getElementById('thr-exclude-btn').addEventListener('click', async () => {
+    if (!activePara) return;
+    const convId = convIdFromUrl();
+    if (!convId) return;
+    const hash = activePara.hash ?? await activePara.hashPromise;
+    await toggleExclusion(convId, activePara.responseIdx, hash);
+    updateSummaryIcon(convId, activePara.responseIdx, hash);
+  });
   sidebarThreadEl = document.getElementById('thr-thread');
   sidebarInputEl = document.getElementById('thr-input');
   sidebarInputEl.addEventListener('keydown', (e) => {
@@ -137,6 +148,33 @@ async function saveSummaryData(convId, data) {
   }
 }
 
+async function toggleExclusion(convId, msgIdx, paragraphHash) {
+  const key = storageKey(convId, msgIdx, paragraphHash);
+  const existing = (await chrome.storage.local.get(key))[key];
+  if (!existing) return;
+  await chrome.storage.local.set({ [key]: { ...existing, excluded: !existing.excluded } });
+}
+
+async function updateSummaryIcon(convId, msgIdx, paragraphHash) {
+  const icon = document.getElementById('thr-summary-icon');
+  if (!icon) return;
+  const summaryData = await loadSummaryData(convId);
+  const key = storageKey(convId, msgIdx, paragraphHash);
+  const thread = (await chrome.storage.local.get(key))[key];
+  if (!thread) return;
+  const hwm = summaryData.highWaterMark[key] ?? 0;
+  if (thread.excluded) {
+    icon.textContent = '⊘';
+    icon.title = 'Excluded from context (click to re-include)';
+  } else if (thread.turns.length <= hwm) {
+    icon.textContent = '✓';
+    icon.title = 'Thread context summarized (click to exclude)';
+  } else {
+    icon.textContent = '◷';
+    icon.title = 'Pending summarization (click to exclude)';
+  }
+}
+
 // ── Storage ───────────────────────────────────────────────────────────
 
 function convIdFromUrl() {
@@ -239,6 +277,7 @@ function openThread(para, paragraphIdx, icon) {
     const turns = await loadThread(convId, responseIdx, hash);
     if (activePara?._token !== token) return;
     renderThread(turns);
+    updateSummaryIcon(convId, responseIdx, hash);
   });
 }
 
@@ -386,6 +425,7 @@ async function handleSend() {
       const updatedTurns = [...existingTurns, userTurn, { role: 'assistant', content: finalText }];
       await saveThread(convId, responseIdx, hash, updatedTurns);
       if (icon) updateBadge(icon, updatedTurns.filter(t => t.role === 'user').length);
+      updateSummaryIcon(convId, responseIdx, hash);
       streamingDiv.textContent = finalText;
     } else {
       streamingDiv.textContent = 'Error: empty response from API';
