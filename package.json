@@ -23,16 +23,25 @@
   "license": "ISC",
   "author": "iscii",
   "type": "module",
-  "main": "build.js",
   "scripts": {
-    "build": "node build.js",
-    "watch": "node build.js --watch",
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "esbuild": "^0.28.0"
+    "preact": "^10.29.1"
+  },
+  "overrides": {
+    "rollup": "2.80.0"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "@crxjs/vite-plugin": "^2.4.0",
+    "@preact/preset-vite": "^2.10.5",
+    "@types/chrome": "^0.1.37",
+    "@types/node": "^25.5.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.0",
+    "vite-plugin-zip-pack": "^1.2.4"
   }
 }
