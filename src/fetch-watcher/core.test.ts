@@ -340,3 +340,63 @@ describe('stream monitoring', () => {
     messages.cleanup()
   })
 })
+
+describe('history filtering', () => {
+  const HISTORY_URL = 'https://claude.ai/api/organizations/org1/chat_conversations/conv1?tree=True'
+
+  it('filters GET response through filterHistory and returns modified body', async () => {
+    const rawBody = {
+      chat_messages: [{
+        sender: 'human',
+        content: [{ type: 'text', text: '<threads-context>\nSummary\n</threads-context>\n\nHello' }],
+      }],
+    }
+    const filteredBody = {
+      chat_messages: [{
+        sender: 'human',
+        content: [{ type: 'text', text: 'Hello' }],
+      }],
+    }
+    const originalFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(rawBody), { status: 200 })
+    )
+    const filterHistory = vi.fn().mockReturnValue(filteredBody)
+    const adapter = {
+      ...makeAdapter(),
+      historyUrlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
+      filterHistory,
+    }
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+
+    const response = await interceptFetch(HISTORY_URL, { method: 'GET' })
+    const json = await response.json()
+
+    expect(filterHistory).toHaveBeenCalledWith(rawBody)
+    expect(json).toEqual(filteredBody)
+  })
+
+  it('passes through GET response unchanged when response is not ok', async () => {
+    const originalFetch = vi.fn().mockResolvedValue(new Response('', { status: 404 }))
+    const filterHistory = vi.fn()
+    const adapter = {
+      ...makeAdapter(),
+      historyUrlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
+      filterHistory,
+    }
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+
+    const response = await interceptFetch(HISTORY_URL, { method: 'GET' })
+
+    expect(filterHistory).not.toHaveBeenCalled()
+    expect(response.status).toBe(404)
+  })
+
+  it('passes through GET when no historyUrlPattern set', async () => {
+    const originalFetch = vi.fn().mockResolvedValue(makeResponse())
+    const { interceptFetch } = createFetchWatcher(makeAdapter(), originalFetch)
+
+    await interceptFetch(HISTORY_URL, { method: 'GET' })
+
+    expect(originalFetch).toHaveBeenCalledWith(HISTORY_URL, { method: 'GET' })
+  })
+})

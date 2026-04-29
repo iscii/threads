@@ -25,6 +25,17 @@ export function createFetchWatcher(
       init.method ?? (input instanceof Request ? input.method : 'GET')
     ).toUpperCase()
 
+    if (method === 'GET' && adapter.historyUrlPattern?.test(url) && adapter.filterHistory) {
+      const response = await originalFetch(input, init)
+      if (!response.ok) return response
+      const json = await response.json()
+      return new Response(JSON.stringify(adapter.filterHistory(json)), {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      })
+    }
+
     if (method !== 'POST' || !adapter.urlPattern.test(url)) {
       return originalFetch(input, init)
     }

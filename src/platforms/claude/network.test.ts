@@ -14,17 +14,25 @@ describe('urlPattern', () => {
   })
 })
 
+describe('historyUrlPattern', () => {
+  it('matches the conversation GET endpoint', () => {
+    expect(claudeAdapter.historyUrlPattern!.test(
+      'https://claude.ai/api/organizations/org123/chat_conversations/conv456?tree=True'
+    )).toBe(true)
+  })
+})
+
 describe('inject', () => {
-  it('prepends context block to prompt', () => {
+  it('prepends threads-context block to prompt', () => {
     const body = { prompt: 'Hello', model: 'claude-sonnet-4-6' }
     const result = claudeAdapter.inject(body, ['Prior context']) as any
-    expect(result.prompt).toBe('<context>\nPrior context\n</context>\n\nHello')
+    expect(result.prompt).toBe('<threads-context>\nPrior context\n</threads-context>\n\nHello')
   })
 
   it('joins multiple summaries with newlines inside context block', () => {
     const body = { prompt: 'Hello' }
     const result = claudeAdapter.inject(body, ['Summary 1', 'Summary 2']) as any
-    expect(result.prompt).toBe('<context>\nSummary 1\nSummary 2\n</context>\n\nHello')
+    expect(result.prompt).toBe('<threads-context>\nSummary 1\nSummary 2\n</threads-context>\n\nHello')
   })
 
   it('preserves all other fields', () => {
@@ -37,10 +45,7 @@ describe('inject', () => {
   it('regenerates turn_message_uuids when present', () => {
     const body = {
       prompt: 'Hello',
-      turn_message_uuids: {
-        human_message_uuid: 'old-human',
-        assistant_message_uuid: 'old-assistant',
-      },
+      turn_message_uuids: { human_message_uuid: 'old-human', assistant_message_uuid: 'old-asst' },
     }
     const result = claudeAdapter.inject(body, ['Summary']) as any
     expect(result.turn_message_uuids.human_message_uuid).not.toBe('old-human')
@@ -48,8 +53,7 @@ describe('inject', () => {
   })
 
   it('omits turn_message_uuids when not present in original', () => {
-    const body = { prompt: 'Hello' }
-    const result = claudeAdapter.inject(body, ['Summary']) as any
+    const result = claudeAdapter.inject({ prompt: 'Hello' }, ['Summary']) as any
     expect(result.turn_message_uuids).toBeUndefined()
   })
 
@@ -64,5 +68,56 @@ describe('inject', () => {
     expect(claudeAdapter.inject(42, ['Summary'])).toBeNull()
     expect(claudeAdapter.inject('string', ['Summary'])).toBeNull()
     expect(claudeAdapter.inject({}, ['Summary'])).toBeNull()
+  })
+})
+
+describe('filterHistory', () => {
+  it('strips injected threads-context block from human message text', () => {
+    const body = {
+      chat_messages: [{
+        sender: 'human',
+        content: [{ type: 'text', text: '<threads-context>\nSummary\n</threads-context>\n\nHello' }],
+      }],
+    }
+    const result = claudeAdapter.filterHistory!(body) as any
+    expect(result.chat_messages[0].content[0].text).toBe('Hello')
+  })
+
+  it('leaves assistant messages untouched', () => {
+    const body = {
+      chat_messages: [{
+        sender: 'assistant',
+        content: [{ type: 'text', text: 'Response' }],
+      }],
+    }
+    const result = claudeAdapter.filterHistory!(body) as any
+    expect(result.chat_messages[0].content[0].text).toBe('Response')
+  })
+
+  it('leaves human messages without context block untouched', () => {
+    const body = {
+      chat_messages: [{
+        sender: 'human',
+        content: [{ type: 'text', text: 'Just a message' }],
+      }],
+    }
+    const result = claudeAdapter.filterHistory!(body) as any
+    expect(result.chat_messages[0].content[0].text).toBe('Just a message')
+  })
+
+  it('leaves non-text content blocks untouched', () => {
+    const body = {
+      chat_messages: [{
+        sender: 'human',
+        content: [{ type: 'image', source: 'data:...' }],
+      }],
+    }
+    const result = claudeAdapter.filterHistory!(body) as any
+    expect(result.chat_messages[0].content[0]).toEqual({ type: 'image', source: 'data:...' })
+  })
+
+  it('returns body unchanged for unrecognized shapes', () => {
+    expect(claudeAdapter.filterHistory!(null)).toBeNull()
+    expect(claudeAdapter.filterHistory!({ other: true })).toEqual({ other: true })
   })
 })
