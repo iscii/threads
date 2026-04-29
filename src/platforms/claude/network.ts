@@ -1,6 +1,6 @@
 import type { NetworkAdapter } from '@/types'
+import { THR_CONTEXT_TAG, THR_CONTEXT_STRIP_RE } from '@/messaging'
 import { CLAUDE_MSG } from './messaging'
-import { THR_CONTEXT_TAG } from '@/messaging'
 
 interface PromptBody {
   prompt: string
@@ -27,10 +27,6 @@ interface ConversationBody {
   chat_messages: ChatMessage[]
   [key: string]: unknown
 }
-
-const CTX_STRIP_RE = new RegExp(
-  `^<${THR_CONTEXT_TAG}>\\n[\\s\\S]*?\\n<\\/${THR_CONTEXT_TAG}>\\n\\n`,
-)
 
 export const claudeAdapter: NetworkAdapter = {
   urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/]+\/completion/,
@@ -72,7 +68,7 @@ export const claudeAdapter: NetworkAdapter = {
             ...msg,
             content: msg.content.map(block =>
               block.type === 'text'
-                ? { ...block, text: block.text.replace(CTX_STRIP_RE, '') }
+                ? { ...block, text: block.text.replace(THR_CONTEXT_STRIP_RE, '') }
                 : block
             ),
           }

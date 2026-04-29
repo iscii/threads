@@ -255,11 +255,11 @@ describe('stream monitoring', () => {
 
   it('emits streamComplete even when summaries were injected', async () => {
     const modifiedBody = {
-      messages: [{ role: 'user', content: '<context>\nSummary\n</context>\n\nHello' }],
+      messages: [{ role: 'user', content: '<threads-context>\nSummary\n</threads-context>\n\nHello' }],
     }
     const originalFetch = vi.fn().mockResolvedValue(makeResponse())
     const adapter = makeAdapter()
-    adapter.inject.mockReturnValue(modifiedBody)
+    adapter.inject.mockReturnValue({ body: modifiedBody, injected: true })
     const { interceptFetch, handleMessage } = createFetchWatcher(adapter, originalFetch)
     const messages = collectMessages()
 
