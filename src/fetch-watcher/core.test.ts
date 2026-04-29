@@ -247,11 +247,22 @@ describe('stream monitoring', () => {
     messages.cleanup()
   })
 
-  it('emits CLAUDE_STREAM_COMPLETE even when no summaries were injected', async () => {
+  it('emits CLAUDE_STREAM_COMPLETE even when summaries were injected', async () => {
+    const modifiedBody = {
+      messages: [{ role: 'user', content: '<context>\nSummary\n</context>\n\nHello' }],
+    }
     const originalFetch = vi.fn().mockResolvedValue(makeResponse())
     const adapter = makeAdapter()
-    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+    adapter.inject.mockReturnValue(modifiedBody)
+    const { interceptFetch, handleMessage } = createFetchWatcher(adapter, originalFetch)
     const messages = collectMessages()
+
+    handleMessage(
+      new MessageEvent('message', {
+        data: { type: MSG.STAGE_SUMMARY, summaryTexts: ['Summary'] },
+        source: window,
+      }),
+    )
 
     const body = { messages: [{ role: 'user', content: 'Hello' }] }
     const response = await interceptFetch(COMPLETION_URL, {
