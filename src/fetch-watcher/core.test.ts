@@ -222,3 +222,74 @@ describe('injection pipeline', () => {
     messages.cleanup()
   })
 })
+
+describe('stream monitoring', () => {
+  it('emits CLAUDE_STREAM_COMPLETE after response stream drains', async () => {
+    const originalFetch = vi.fn().mockResolvedValue(makeResponse())
+    const adapter = makeAdapter()
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+    const messages = collectMessages()
+
+    const body = { messages: [{ role: 'user', content: 'Hello' }] }
+    const response = await interceptFetch(COMPLETION_URL, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+
+    await response.text()
+
+    await vi.waitFor(() => {
+      expect(
+        messages.get().find((m) => m.type === CLAUDE_MSG.STREAM_COMPLETE),
+      ).toBeDefined()
+    }, { timeout: 200 })
+
+    messages.cleanup()
+  })
+
+  it('emits CLAUDE_STREAM_COMPLETE even when no summaries were injected', async () => {
+    const originalFetch = vi.fn().mockResolvedValue(makeResponse())
+    const adapter = makeAdapter()
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+    const messages = collectMessages()
+
+    const body = { messages: [{ role: 'user', content: 'Hello' }] }
+    const response = await interceptFetch(COMPLETION_URL, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+
+    await response.text()
+
+    await vi.waitFor(() => {
+      expect(
+        messages.get().find((m) => m.type === CLAUDE_MSG.STREAM_COMPLETE),
+      ).toBeDefined()
+    }, { timeout: 200 })
+
+    messages.cleanup()
+  })
+
+  it('emits CLAUDE_STREAM_COMPLETE for responses with no body', async () => {
+    const originalFetch = vi.fn().mockResolvedValue(
+      new Response(null, { status: 200 }),
+    )
+    const adapter = makeAdapter()
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+    const messages = collectMessages()
+
+    const body = { messages: [{ role: 'user', content: 'Hello' }] }
+    await interceptFetch(COMPLETION_URL, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+
+    expect(
+      messages.get().find((m) => m.type === CLAUDE_MSG.STREAM_COMPLETE),
+    ).toBeDefined()
+
+    messages.cleanup()
+  })
+})
