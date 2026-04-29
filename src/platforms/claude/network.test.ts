@@ -91,16 +91,44 @@ describe('inject — turn_message_uuids', () => {
   })
 })
 
+describe('inject — prompt string format', () => {
+  it('prepends context block to prompt string', () => {
+    const body = { prompt: 'Hello', model: 'claude-sonnet-4-6' }
+    const result = claudeAdapter.inject(body, ['Prior context']) as any
+    expect(result.prompt).toBe('<context>\nPrior context\n</context>\n\nHello')
+  })
+
+  it('regenerates turn_message_uuids when present', () => {
+    const body = {
+      prompt: 'Hello',
+      turn_message_uuids: {
+        human_message_uuid: 'old-human',
+        assistant_message_uuid: 'old-assistant',
+      },
+    }
+    const result = claudeAdapter.inject(body, ['Summary']) as any
+    expect(result.turn_message_uuids.human_message_uuid).not.toBe('old-human')
+    expect(result.turn_message_uuids.human_message_uuid).toHaveLength(36)
+  })
+
+  it('preserves all other fields', () => {
+    const body = { prompt: 'Hello', model: 'claude-sonnet-4-6', timezone: 'America/New_York' }
+    const result = claudeAdapter.inject(body, ['Summary']) as any
+    expect(result.model).toBe('claude-sonnet-4-6')
+    expect(result.timezone).toBe('America/New_York')
+  })
+})
+
 describe('inject — null returns', () => {
-  it('returns null when no user message found', () => {
+  it('returns null when no user message found in messages body', () => {
     const body = { messages: [{ role: 'assistant', content: 'Hi' }] }
     expect(claudeAdapter.inject(body, ['Summary'])).toBeNull()
   })
 
-  it('returns null for non-messages-array body', () => {
-    expect(claudeAdapter.inject({ prompt: 'old format' }, ['Summary'])).toBeNull()
+  it('returns null for unrecognized body shapes', () => {
     expect(claudeAdapter.inject(null, ['Summary'])).toBeNull()
     expect(claudeAdapter.inject(42, ['Summary'])).toBeNull()
     expect(claudeAdapter.inject('string', ['Summary'])).toBeNull()
+    expect(claudeAdapter.inject({}, ['Summary'])).toBeNull()
   })
 })

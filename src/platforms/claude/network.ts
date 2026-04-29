@@ -21,6 +21,15 @@ interface MessagesBody {
   [key: string]: unknown
 }
 
+interface PromptBody {
+  prompt: string
+  turn_message_uuids?: {
+    human_message_uuid: string
+    assistant_message_uuid: string
+  }
+  [key: string]: unknown
+}
+
 export const claudeAdapter: NetworkAdapter = {
   urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/]+\/completion/,
   messages: {
@@ -30,32 +39,43 @@ export const claudeAdapter: NetworkAdapter = {
   },
 
   inject(body: unknown, summaries: string[]): unknown | null {
-    if (!isMessagesBody(body)) return null
-
-    const msgs = [...body.messages]
-    const lastUserIdx = msgs.map(m => m.role).lastIndexOf('user')
-    if (lastUserIdx === -1) return null
-
     const prefix = `<context>\n${summaries.join('\n')}\n</context>\n\n`
-    const orig = msgs[lastUserIdx].content
-
-    msgs[lastUserIdx] = {
-      ...msgs[lastUserIdx],
-      content: Array.isArray(orig)
-        ? [{ type: 'text', text: prefix }, ...orig]
-        : prefix + orig,
+    const uuids = {
+      turn_message_uuids: {
+        human_message_uuid: crypto.randomUUID(),
+        assistant_message_uuid: crypto.randomUUID(),
+      },
     }
 
-    return {
-      ...body,
-      messages: msgs,
-      ...(body.turn_message_uuids ? {
-        turn_message_uuids: {
-          human_message_uuid: crypto.randomUUID(),
-          assistant_message_uuid: crypto.randomUUID(),
-        },
-      } : {}),
+    if (isMessagesBody(body)) {
+      const msgs = [...body.messages]
+      const lastUserIdx = msgs.map(m => m.role).lastIndexOf('user')
+      if (lastUserIdx === -1) return null
+
+      const orig = msgs[lastUserIdx].content
+      msgs[lastUserIdx] = {
+        ...msgs[lastUserIdx],
+        content: Array.isArray(orig)
+          ? [{ type: 'text', text: prefix }, ...orig]
+          : prefix + orig,
+      }
+
+      return {
+        ...body,
+        messages: msgs,
+        ...(body.turn_message_uuids ? uuids : {}),
+      }
     }
+
+    if (isPromptBody(body)) {
+      return {
+        ...body,
+        prompt: prefix + body.prompt,
+        ...(body.turn_message_uuids ? uuids : {}),
+      }
+    }
+
+    return null
   },
 }
 
@@ -64,5 +84,13 @@ function isMessagesBody(body: unknown): body is MessagesBody {
     typeof body === 'object' &&
     body !== null &&
     Array.isArray((body as MessagesBody).messages)
+  )
+}
+
+function isPromptBody(body: unknown): body is PromptBody {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    typeof (body as PromptBody).prompt === 'string'
   )
 }
