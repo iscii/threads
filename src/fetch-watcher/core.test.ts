@@ -2,15 +2,21 @@ import { vi, beforeEach } from 'vitest'
 import { createFetchWatcher } from './core'
 import { claudeAdapter } from '@/platforms/claude/network'
 import { MSG } from '@/messaging'
-import { CLAUDE_MSG } from '@/platforms/claude/messaging'
 
 const COMPLETION_URL =
   'https://claude.ai/api/organizations/org1/chat_conversations/conv1/completion'
 const OTHER_URL = 'https://claude.ai/api/other'
 
+const MSG_TYPES = {
+  endpointCaptured: 'TEST_ENDPOINT_CAPTURED',
+  summaryInjected: 'TEST_SUMMARY_INJECTED',
+  streamComplete: 'TEST_STREAM_COMPLETE',
+}
+
 function makeAdapter() {
   return {
     urlPattern: claudeAdapter.urlPattern,
+    messages: MSG_TYPES,
     inject: vi.fn().mockReturnValue({ messages: [{ role: 'user', content: 'injected' }] }),
   }
 }
@@ -78,7 +84,7 @@ describe('passthrough', () => {
   })
 })
 
-describe('CLAUDE_ENDPOINT_CAPTURED', () => {
+describe('endpoint captured', () => {
   it('emits on every matching POST regardless of staged summaries', async () => {
     const originalFetch = vi.fn().mockResolvedValue(makeResponse())
     const adapter = makeAdapter()
@@ -93,7 +99,7 @@ describe('CLAUDE_ENDPOINT_CAPTURED', () => {
     await new Promise<void>(resolve => setTimeout(resolve, 0))
 
     const captured = messages.get().find(
-      (m) => m.type === CLAUDE_MSG.ENDPOINT_CAPTURED,
+      (m) => m.type === MSG_TYPES.endpointCaptured,
     )
     expect(captured).toBeDefined()
     expect(captured.url).toBe(COMPLETION_URL)
@@ -123,13 +129,13 @@ describe('injection pipeline', () => {
       expect.objectContaining({ body: JSON.stringify(body) }),
     )
     expect(
-      messages.get().find((m) => m.type === CLAUDE_MSG.SUMMARY_INJECTED),
+      messages.get().find((m) => m.type === MSG_TYPES.summaryInjected),
     ).toBeUndefined()
 
     messages.cleanup()
   })
 
-  it('injects summaries and emits CLAUDE_SUMMARY_INJECTED when buffer has summaries', async () => {
+  it('injects summaries and emits summaryInjected when buffer has summaries', async () => {
     const modifiedBody = {
       messages: [{ role: 'user', content: '<context>\nSummary\n</context>\n\nHello' }],
     }
@@ -159,7 +165,7 @@ describe('injection pipeline', () => {
       expect.objectContaining({ body: JSON.stringify(modifiedBody) }),
     )
     expect(
-      messages.get().find((m) => m.type === CLAUDE_MSG.SUMMARY_INJECTED),
+      messages.get().find((m) => m.type === MSG_TYPES.summaryInjected),
     ).toBeDefined()
 
     messages.cleanup()
@@ -213,7 +219,7 @@ describe('injection pipeline', () => {
       expect.objectContaining({ body: JSON.stringify(body) }),
     )
     expect(
-      messages.get().find((m) => m.type === CLAUDE_MSG.SUMMARY_INJECTED),
+      messages.get().find((m) => m.type === MSG_TYPES.summaryInjected),
     ).toBeUndefined()
 
     await interceptFetch(COMPLETION_URL, { method: 'POST', body: JSON.stringify(body) })
@@ -224,7 +230,7 @@ describe('injection pipeline', () => {
 })
 
 describe('stream monitoring', () => {
-  it('emits CLAUDE_STREAM_COMPLETE after response stream drains', async () => {
+  it('emits streamComplete after response stream drains', async () => {
     const originalFetch = vi.fn().mockResolvedValue(makeResponse())
     const adapter = makeAdapter()
     const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
@@ -240,14 +246,14 @@ describe('stream monitoring', () => {
 
     await vi.waitFor(() => {
       expect(
-        messages.get().find((m) => m.type === CLAUDE_MSG.STREAM_COMPLETE),
+        messages.get().find((m) => m.type === MSG_TYPES.streamComplete),
       ).toBeDefined()
     }, { timeout: 200 })
 
     messages.cleanup()
   })
 
-  it('emits CLAUDE_STREAM_COMPLETE even when summaries were injected', async () => {
+  it('emits streamComplete even when summaries were injected', async () => {
     const modifiedBody = {
       messages: [{ role: 'user', content: '<context>\nSummary\n</context>\n\nHello' }],
     }
@@ -274,14 +280,14 @@ describe('stream monitoring', () => {
 
     await vi.waitFor(() => {
       expect(
-        messages.get().find((m) => m.type === CLAUDE_MSG.STREAM_COMPLETE),
+        messages.get().find((m) => m.type === MSG_TYPES.streamComplete),
       ).toBeDefined()
     }, { timeout: 200 })
 
     messages.cleanup()
   })
 
-  it('emits CLAUDE_STREAM_COMPLETE early when isStreamDone returns true', async () => {
+  it('emits streamComplete early when isStreamDone returns true', async () => {
     const originalFetch = vi.fn().mockResolvedValue(
       makeResponse(makeStream('data: [DONE]')),
     )
@@ -302,7 +308,7 @@ describe('stream monitoring', () => {
 
     await vi.waitFor(() => {
       expect(
-        messages.get().find((m) => m.type === CLAUDE_MSG.STREAM_COMPLETE),
+        messages.get().find((m) => m.type === MSG_TYPES.streamComplete),
       ).toBeDefined()
     }, { timeout: 200 })
 
@@ -311,7 +317,7 @@ describe('stream monitoring', () => {
     messages.cleanup()
   })
 
-  it('emits CLAUDE_STREAM_COMPLETE for responses with no body', async () => {
+  it('emits streamComplete for responses with no body', async () => {
     const originalFetch = vi.fn().mockResolvedValue(
       new Response(null, { status: 200 }),
     )
@@ -328,7 +334,7 @@ describe('stream monitoring', () => {
     await new Promise<void>(resolve => setTimeout(resolve, 0))
 
     expect(
-      messages.get().find((m) => m.type === CLAUDE_MSG.STREAM_COMPLETE),
+      messages.get().find((m) => m.type === MSG_TYPES.streamComplete),
     ).toBeDefined()
 
     messages.cleanup()

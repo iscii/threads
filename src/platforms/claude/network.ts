@@ -1,4 +1,5 @@
 import type { NetworkAdapter } from '@/types'
+import { CLAUDE_MSG } from './messaging'
 
 interface Message {
   role: string
@@ -22,6 +23,11 @@ interface MessagesBody {
 
 export const claudeAdapter: NetworkAdapter = {
   urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/]+\/completion/,
+  messages: {
+    endpointCaptured: CLAUDE_MSG.ENDPOINT_CAPTURED,
+    summaryInjected: CLAUDE_MSG.SUMMARY_INJECTED,
+    streamComplete: CLAUDE_MSG.STREAM_COMPLETE,
+  },
 
   inject(body: unknown, summaries: string[]): unknown | null {
     if (!isMessagesBody(body)) return null

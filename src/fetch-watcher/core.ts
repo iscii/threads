@@ -1,6 +1,5 @@
 import type { NetworkAdapter } from '@/types'
 import { MSG } from '@/messaging'
-import { CLAUDE_MSG } from '@/platforms/claude/messaging'
 
 export function createFetchWatcher(
   adapter: NetworkAdapter,
@@ -38,7 +37,7 @@ export function createFetchWatcher(
     }
 
     window.postMessage(
-      { type: CLAUDE_MSG.ENDPOINT_CAPTURED, url, body },
+      { type: adapter.messages.endpointCaptured, url, body },
       location.origin,
     )
 
@@ -58,9 +57,9 @@ export function createFetchWatcher(
 
     if (!response.body) {
       if (injected) {
-        window.postMessage({ type: CLAUDE_MSG.SUMMARY_INJECTED }, location.origin)
+        window.postMessage({ type: adapter.messages.summaryInjected }, location.origin)
       }
-      window.postMessage({ type: CLAUDE_MSG.STREAM_COMPLETE }, location.origin)
+      window.postMessage({ type: adapter.messages.streamComplete }, location.origin)
       return response
     }
 
@@ -79,12 +78,12 @@ export function createFetchWatcher(
         }
       } finally {
         reader.releaseLock()
-        window.postMessage({ type: CLAUDE_MSG.STREAM_COMPLETE }, location.origin)
+        window.postMessage({ type: adapter.messages.streamComplete }, location.origin)
       }
     })()
 
     if (injected) {
-      window.postMessage({ type: CLAUDE_MSG.SUMMARY_INJECTED }, location.origin)
+      window.postMessage({ type: adapter.messages.summaryInjected }, location.origin)
     }
 
     return new Response(s1, {
