@@ -45,15 +45,14 @@ export function createFetchWatcher(
     let injected = false
     let modifiedInit = init
 
-    console.debug('[fw] intercept:', { url, stagedCount: stagedSummaries.length, bodyParsed: body !== null })
-
     if (stagedSummaries.length > 0 && body !== null) {
       const modified = adapter.inject(body, stagedSummaries)
-      console.debug('[fw] inject result:', modified === null ? 'null (body format unrecognized)' : 'modified')
       if (modified !== null) {
         modifiedInit = { ...init, body: JSON.stringify(modified) }
         stagedSummaries = []
         injected = true
+      } else {
+        console.warn('[fw] inject() returned null — request shape may have changed. Summaries kept for next request. Body keys:', Object.keys(body as object))
       }
     }
 
