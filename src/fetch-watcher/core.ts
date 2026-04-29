@@ -12,7 +12,6 @@ export function createFetchWatcher(
     const data = event.data as { type?: string; summaryTexts?: string[] }
     if (data?.type === MSG.STAGE_SUMMARY) {
       stagedSummaries = data.summaryTexts ?? []
-      console.debug('[fw] summaries staged:', stagedSummaries)
     }
   }
 
@@ -25,11 +24,11 @@ export function createFetchWatcher(
       init.method ?? (input instanceof Request ? input.method : 'GET')
     ).toUpperCase()
 
-    if (method === 'GET' && adapter.historyUrlPattern?.test(url) && adapter.filterHistory) {
+    if (method === 'GET' && adapter.history?.urlPattern.test(url)) {
       const response = await originalFetch(input, init)
       if (!response.ok) return response
       const json = await response.json()
-      return new Response(JSON.stringify(adapter.filterHistory(json)), {
+      return new Response(JSON.stringify(adapter.history.filter(json)), {
         status: response.status,
         statusText: response.statusText,
         headers: response.headers,
@@ -57,13 +56,13 @@ export function createFetchWatcher(
     let modifiedInit = init
 
     if (stagedSummaries.length > 0 && body !== null) {
-      const modified = adapter.inject(body, stagedSummaries)
-      if (modified !== null) {
-        modifiedInit = { ...init, body: JSON.stringify(modified) }
+      const result = adapter.inject(body, stagedSummaries)
+      if (result.injected) {
+        modifiedInit = { ...init, body: JSON.stringify(result.body) }
         stagedSummaries = []
         injected = true
       } else {
-        console.warn('[fw] inject() returned null — request shape may have changed. Summaries kept for next request. Body keys:', Object.keys(body as object))
+        console.warn('[fw] inject() could not match body shape — request shape may have changed. Summaries kept for next request. Body keys:', Object.keys(body as object))
       }
     }
 

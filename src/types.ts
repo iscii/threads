@@ -5,8 +5,10 @@ export interface NetworkAdapter {
     summaryInjected: string
     streamComplete: string
   }
-  inject(body: unknown, summaries: string[]): unknown | null
+  inject(body: unknown, summaries: string[]): { body: unknown; injected: boolean }
   isStreamDone?(chunk: string): boolean
-  historyUrlPattern?: RegExp
-  filterHistory?(body: unknown): unknown
+  history?: {
+    urlPattern: RegExp
+    filter(body: unknown): unknown
+  }
 }

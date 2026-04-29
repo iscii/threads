@@ -1,5 +1,6 @@
 import type { NetworkAdapter } from '@/types'
 import { CLAUDE_MSG } from './messaging'
+import { THR_CONTEXT_TAG } from '@/messaging'
 
 interface PromptBody {
   prompt: string
@@ -27,50 +28,57 @@ interface ConversationBody {
   [key: string]: unknown
 }
 
-const CTX_TAG = 'threads-context'
-const CTX_STRIP_RE = new RegExp(`^<${CTX_TAG}>\\n[\\s\\S]*?\\n<\\/${CTX_TAG}>\\n\\n`)
+const CTX_STRIP_RE = new RegExp(
+  `^<${THR_CONTEXT_TAG}>\\n[\\s\\S]*?\\n<\\/${THR_CONTEXT_TAG}>\\n\\n`,
+)
 
 export const claudeAdapter: NetworkAdapter = {
   urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/]+\/completion/,
-  historyUrlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
   messages: {
     endpointCaptured: CLAUDE_MSG.ENDPOINT_CAPTURED,
     summaryInjected: CLAUDE_MSG.SUMMARY_INJECTED,
     streamComplete: CLAUDE_MSG.STREAM_COMPLETE,
   },
 
-  inject(body: unknown, summaries: string[]): unknown | null {
-    if (!isPromptBody(body)) return null
+  inject(body: unknown, summaries: string[]): { body: unknown; injected: boolean } {
+    if (!isPromptBody(body)) return { body, injected: false }
 
-    const prefix = `<${CTX_TAG}>\n${summaries.join('\n')}\n</${CTX_TAG}>\n\n`
+    const prefix = `<${THR_CONTEXT_TAG}>\n${summaries.join('\n')}\n</${THR_CONTEXT_TAG}>\n\n`
     return {
-      ...body,
-      prompt: prefix + body.prompt,
-      ...(body.turn_message_uuids ? {
-        turn_message_uuids: {
-          human_message_uuid: crypto.randomUUID(),
-          assistant_message_uuid: crypto.randomUUID(),
-        },
-      } : {}),
+      body: {
+        ...body,
+        prompt: prefix + body.prompt,
+        ...(body.turn_message_uuids ? {
+          turn_message_uuids: {
+            human_message_uuid: crypto.randomUUID(),
+            assistant_message_uuid: crypto.randomUUID(),
+          },
+        } : {}),
+      },
+      injected: true,
     }
   },
 
-  filterHistory(body: unknown): unknown {
-    if (!isConversationBody(body)) return body
-    return {
-      ...body,
-      chat_messages: body.chat_messages.map(msg => {
-        if (msg.sender !== 'human') return msg
-        return {
-          ...msg,
-          content: msg.content.map(block =>
-            block.type === 'text'
-              ? { ...block, text: block.text.replace(CTX_STRIP_RE, '') }
-              : block
-          ),
-        }
-      }),
-    }
+  history: {
+    urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
+
+    filter(body: unknown): unknown {
+      if (!isConversationBody(body)) return body
+      return {
+        ...body,
+        chat_messages: body.chat_messages.map(msg => {
+          if (msg.sender !== 'human') return msg
+          return {
+            ...msg,
+            content: msg.content.map(block =>
+              block.type === 'text'
+                ? { ...block, text: block.text.replace(CTX_STRIP_RE, '') }
+                : block
+            ),
+          }
+        }),
+      }
+    },
   },
 }
 

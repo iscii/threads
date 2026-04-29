@@ -17,7 +17,7 @@ function makeAdapter() {
   return {
     urlPattern: claudeAdapter.urlPattern,
     messages: MSG_TYPES,
-    inject: vi.fn().mockReturnValue({ messages: [{ role: 'user', content: 'injected' }] }),
+    inject: vi.fn().mockReturnValue({ body: { messages: [{ role: 'user', content: 'injected' }] }, injected: true }),
   }
 }
 
@@ -137,11 +137,11 @@ describe('injection pipeline', () => {
 
   it('injects summaries and emits summaryInjected when buffer has summaries', async () => {
     const modifiedBody = {
-      messages: [{ role: 'user', content: '<context>\nSummary\n</context>\n\nHello' }],
+      messages: [{ role: 'user', content: '<threads-context>\nSummary\n</threads-context>\n\nHello' }],
     }
     const originalFetch = vi.fn().mockResolvedValue(makeResponse())
     const adapter = makeAdapter()
-    adapter.inject.mockReturnValue(modifiedBody)
+    adapter.inject.mockReturnValue({ body: modifiedBody, injected: true })
     const { interceptFetch, handleMessage } = createFetchWatcher(adapter, originalFetch)
     const messages = collectMessages()
 
@@ -194,12 +194,12 @@ describe('injection pipeline', () => {
     await new Promise<void>(resolve => setTimeout(resolve, 0))
   })
 
-  it('keeps buffer and fires original request when inject returns null', async () => {
+  it('keeps buffer and fires original request when inject returns injected: false', async () => {
     const originalFetch = vi.fn()
       .mockResolvedValueOnce(makeResponse())
       .mockResolvedValueOnce(makeResponse())
     const adapter = makeAdapter()
-    adapter.inject.mockReturnValue(null)
+    adapter.inject.mockReturnValue({ body: {}, injected: false })
     const { interceptFetch, handleMessage } = createFetchWatcher(adapter, originalFetch)
     const messages = collectMessages()
 
@@ -344,7 +344,7 @@ describe('stream monitoring', () => {
 describe('history filtering', () => {
   const HISTORY_URL = 'https://claude.ai/api/organizations/org1/chat_conversations/conv1?tree=True'
 
-  it('filters GET response through filterHistory and returns modified body', async () => {
+  it('filters GET response through history.filter and returns modified body', async () => {
     const rawBody = {
       chat_messages: [{
         sender: 'human',
@@ -360,38 +360,42 @@ describe('history filtering', () => {
     const originalFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(rawBody), { status: 200 })
     )
-    const filterHistory = vi.fn().mockReturnValue(filteredBody)
+    const filter = vi.fn().mockReturnValue(filteredBody)
     const adapter = {
       ...makeAdapter(),
-      historyUrlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
-      filterHistory,
+      history: {
+        urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
+        filter,
+      },
     }
     const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
 
     const response = await interceptFetch(HISTORY_URL, { method: 'GET' })
     const json = await response.json()
 
-    expect(filterHistory).toHaveBeenCalledWith(rawBody)
+    expect(filter).toHaveBeenCalledWith(rawBody)
     expect(json).toEqual(filteredBody)
   })
 
   it('passes through GET response unchanged when response is not ok', async () => {
     const originalFetch = vi.fn().mockResolvedValue(new Response('', { status: 404 }))
-    const filterHistory = vi.fn()
+    const filter = vi.fn()
     const adapter = {
       ...makeAdapter(),
-      historyUrlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
-      filterHistory,
+      history: {
+        urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
+        filter,
+      },
     }
     const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
 
     const response = await interceptFetch(HISTORY_URL, { method: 'GET' })
 
-    expect(filterHistory).not.toHaveBeenCalled()
+    expect(filter).not.toHaveBeenCalled()
     expect(response.status).toBe(404)
   })
 
-  it('passes through GET when no historyUrlPattern set', async () => {
+  it('passes through GET when no history set', async () => {
     const originalFetch = vi.fn().mockResolvedValue(makeResponse())
     const { interceptFetch } = createFetchWatcher(makeAdapter(), originalFetch)
 
