@@ -2,15 +2,6 @@ import type { NetworkAdapter } from '@/types'
 import { MSG } from '@/messaging'
 import { CLAUDE_MSG } from '@/platforms/claude/messaging'
 
-function emit(type: string, extra?: Record<string, unknown>): void {
-  window.dispatchEvent(
-    new MessageEvent('message', {
-      data: { type, ...extra },
-      source: window,
-    }),
-  )
-}
-
 export function createFetchWatcher(
   adapter: NetworkAdapter,
   originalFetch: typeof fetch,
@@ -45,7 +36,10 @@ export function createFetchWatcher(
       // non-JSON body — pass through unmodified
     }
 
-    emit(CLAUDE_MSG.ENDPOINT_CAPTURED, { url, body })
+    window.postMessage(
+      { type: CLAUDE_MSG.ENDPOINT_CAPTURED, url, body },
+      location.origin,
+    )
 
     let injected = false
     let modifiedInit = init
@@ -61,12 +55,11 @@ export function createFetchWatcher(
 
     const response = await originalFetch(input, modifiedInit)
 
-    if (injected) {
-      emit(CLAUDE_MSG.SUMMARY_INJECTED)
-    }
-
-    if (!response.body || !adapter.isStreamDone) {
-      emit(CLAUDE_MSG.STREAM_COMPLETE)
+    if (!response.body) {
+      if (injected) {
+        window.postMessage({ type: CLAUDE_MSG.SUMMARY_INJECTED }, location.origin)
+      }
+      window.postMessage({ type: CLAUDE_MSG.STREAM_COMPLETE }, location.origin)
       return response
     }
 
@@ -80,16 +73,20 @@ export function createFetchWatcher(
           if (done) break
           if (
             value !== undefined &&
-            adapter.isStreamDone!(new TextDecoder().decode(value))
+            adapter.isStreamDone?.(new TextDecoder().decode(value))
           ) {
             break
           }
         }
       } finally {
         reader.releaseLock()
-        emit(CLAUDE_MSG.STREAM_COMPLETE)
+        window.postMessage({ type: CLAUDE_MSG.STREAM_COMPLETE }, location.origin)
       }
     })()
+
+    if (injected) {
+      window.postMessage({ type: CLAUDE_MSG.SUMMARY_INJECTED }, location.origin)
+    }
 
     return new Response(s1, {
       status: response.status,

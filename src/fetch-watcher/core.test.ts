@@ -90,6 +90,7 @@ describe('CLAUDE_ENDPOINT_CAPTURED', () => {
       method: 'POST',
       body: JSON.stringify(body),
     })
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
 
     const captured = messages.get().find(
       (m) => m.type === CLAUDE_MSG.ENDPOINT_CAPTURED,
@@ -114,6 +115,7 @@ describe('injection pipeline', () => {
       method: 'POST',
       body: JSON.stringify(body),
     })
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
 
     expect(adapter.inject).not.toHaveBeenCalled()
     expect(originalFetch).toHaveBeenCalledWith(
@@ -149,6 +151,7 @@ describe('injection pipeline', () => {
       method: 'POST',
       body: JSON.stringify(body),
     })
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
 
     expect(adapter.inject).toHaveBeenCalledWith(body, ['Summary'])
     expect(originalFetch).toHaveBeenCalledWith(
@@ -163,7 +166,9 @@ describe('injection pipeline', () => {
   })
 
   it('clears buffer after successful injection', async () => {
-    const originalFetch = vi.fn().mockResolvedValue(makeResponse())
+    const originalFetch = vi.fn()
+      .mockResolvedValueOnce(makeResponse())
+      .mockResolvedValueOnce(makeResponse())
     const adapter = makeAdapter()
     const { interceptFetch, handleMessage } = createFetchWatcher(adapter, originalFetch)
 
@@ -180,10 +185,13 @@ describe('injection pipeline', () => {
 
     await interceptFetch(COMPLETION_URL, { method: 'POST', body: JSON.stringify(body) })
     expect(adapter.inject).toHaveBeenCalledTimes(1)
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
   })
 
   it('keeps buffer and fires original request when inject returns null', async () => {
-    const originalFetch = vi.fn().mockResolvedValue(makeResponse())
+    const originalFetch = vi.fn()
+      .mockResolvedValueOnce(makeResponse())
+      .mockResolvedValueOnce(makeResponse())
     const adapter = makeAdapter()
     adapter.inject.mockReturnValue(null)
     const { interceptFetch, handleMessage } = createFetchWatcher(adapter, originalFetch)
@@ -198,6 +206,7 @@ describe('injection pipeline', () => {
 
     const body = { messages: [{ role: 'user', content: 'Hello' }] }
     await interceptFetch(COMPLETION_URL, { method: 'POST', body: JSON.stringify(body) })
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
 
     expect(originalFetch).toHaveBeenCalledWith(
       COMPLETION_URL,
