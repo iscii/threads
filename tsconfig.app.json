@@ -12,7 +12,7 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    "types": ["vite/client", "@crxjs/vite-plugin/client", "chrome"],
+    "types": ["vite/client", "@crxjs/vite-plugin/client", "chrome", "vitest/globals"],
     "allowImportingTsExtensions": true,
     "strict": true,
     "noFallthroughCasesInSwitch": true,
