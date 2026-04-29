@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Threads — Chat Extension</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:      #1a1a1a;
+  --bg2:     #212121;
+  --bg3:     #282828;
+  --border:  #2c2c2c;
+  --border2: #363636;
+  --text:    #e3e3e3;
+  --text2:   #9a9a9a;
+  --text3:   #5e5e5e;
+  --accent:  #c98a52;
+  --adim:    rgba(201,138,82,.11);
+  --aborder: rgba(201,138,82,.22);
+  --r:       10px;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 15px;
+  line-height: 1.68;
+  min-width: 960px;
+}
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+/* ── Layout ─────────────────────────────────────────────────── */
+.app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+.hdr {
+  height: 44px; flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 20px; gap: 10px;
+}
+.hdr-title { font-size: 13px; color: var(--text3); }
+.hdr-badge {
+  font-size: 11px; font-weight: 500;
+  background: var(--adim); border: 1px solid var(--aborder);
+  color: var(--accent); padding: 1px 8px; border-radius: 5px;
+}
+.hdr-share {
+  margin-left: auto; font-size: 12px; color: var(--text3);
+  background: var(--bg3); border: 1px solid var(--border2);
+  padding: 3px 12px; border-radius: 6px; cursor: pointer;
+}
+
+.scroll-area { flex: 1; overflow-y: auto; }
+
+.content-grid {
+  display: flex; justify-content: center; gap: 20px;
+  padding: 0 32px 180px; min-height: 100%;
+  align-items: flex-start;
+}
+
+.chat-col {
+  width: 580px; flex-shrink: 0;
+  padding-top: 48px; position: relative;
+}
+
+.thread-zone {
+  width: 308px; flex-shrink: 0;
+  padding-top: 48px; position: relative;
+}
+
+/* ── Messages ───────────────────────────────────────────────── */
+.msg-group { margin-bottom: 6px; }
+
+.user-row { display: flex; justify-content: flex-end; padding: 6px 0; }
+.user-bubble {
+  background: var(--bg3); border-radius: 18px 18px 4px 18px;
+  padding: 10px 16px; max-width: 76%; color: var(--text);
+  font-size: 15px;
+}
+
+/* Block */
+.blk {
+  position: relative;
+  padding: 6px 36px 6px 10px;
+  margin: 0 0 1px -10px;
+  border-radius: 7px;
+  border-left: 2px solid transparent;
+  transition: background .12s, border-color .12s;
+  cursor: default;
+}
+.blk:hover { background: rgba(255,255,255,.03); }
+.blk.lit {
+  background: rgba(201,138,82,.04);
+  border-left-color: var(--accent);
+}
+.blk.lit.active-thread { border-left-color: var(--accent); }
+
+/* Thread trigger button */
+.blk-btn {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 24px; height: 24px; border-radius: 6px;
+  background: var(--bg3); border: 1px solid var(--border2);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text3);
+  opacity: 0; pointer-events: none;
+  transition: opacity .14s, color .12s, background .12s;
+}
+.blk:hover .blk-btn { opacity: 1; pointer-events: all; }
+.blk-btn:hover { color: var(--accent); background: var(--adim); border-color: var(--aborder); }
+
+/* Thread dot — when thread exists */
+.blk-dot {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 15px; height: 15px; border-radius: 50%;
+  background: var(--adim); border: 1px solid var(--aborder);
+  color: var(--accent); cursor: pointer; margin-left: 5px;
+  vertical-align: middle; flex-shrink: 0;
+  transition: background .12s;
+}
+.blk-dot:hover { background: rgba(201,138,82,.22); }
+
+/* ── Thread Panel ───────────────────────────────────────────── */
+.tp {
+  position: absolute; left: 0; width: 296px;
+  background: var(--bg2); border: 1px solid var(--border2);
+  border-radius: var(--r); overflow: hidden;
+  box-shadow: 0 6px 28px rgba(0,0,0,.42);
+  animation: tpIn .17s ease;
+  transition: top .28s cubic-bezier(0.4,0,0.2,1), border-color .15s, box-shadow .15s;
+  z-index: 1;
+}
+.tp.active {
+  border-color: var(--aborder);
+  box-shadow: 0 6px 28px rgba(0,0,0,.5), 0 0 0 1px var(--aborder);
+  z-index: 10;
+}
+
+@keyframes tpIn {
+  from { opacity: 0; transform: translateY(-8px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+/* Connector tick */
+.tp::before {
+  content: '';
+  position: absolute; left: -9px; top: 18px;
+  width: 0; height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-right: 9px solid var(--border2);
+}
+.tp.active::before { border-right-color: var(--aborder); }
+
+.tp-head {
+  padding: 10px 10px 8px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-start; gap: 6px;
+}
+.tp-quote {
+  flex: 1; font-size: 11.5px; color: var(--text3);
+  font-style: italic; line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical; overflow: hidden;
+}
+.tp-actions { display: flex; gap: 2px; flex-shrink: 0; margin-top: 1px; }
+.tp-btn {
+  width: 22px; height: 22px; border-radius: 4px;
+  background: none; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text3); transition: all .12s;
+}
+.tp-btn:hover { background: var(--bg3); color: var(--text2); }
+.tp-btn.on { color: var(--accent); }
+.tp-btn.on:hover { background: var(--adim); }
+
+.tp-msgs {
+  padding: 10px 12px 6px; max-height: 230px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.tp-msg { font-size: 13px; line-height: 1.52; }
+.tp-msg.user {
+  align-self: flex-end;
+  background: var(--bg3); border-radius: 10px 10px 2px 10px;
+  padding: 6px 10px; max-width: 88%; color: var(--text);
+}
+.tp-msg.assistant { color: var(--text2); }
+
+.tp-typing { display: flex; gap: 4px; align-items: center; padding: 2px 0; }
+.tp-typing span {
+  width: 5px; height: 5px; background: var(--text3);
+  border-radius: 50%; animation: bnc 1.2s ease-in-out infinite;
+}
+.tp-typing span:nth-child(2) { animation-delay: .2s; }
+.tp-typing span:nth-child(3) { animation-delay: .4s; }
+@keyframes bnc {
+  0%,80%,100% { transform: translateY(0); opacity: .3; }
+  40%          { transform: translateY(-4px); opacity: 1; }
+}
+
+.tp-input-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-top: 1px solid var(--border);
+}
+.tp-input {
+  flex: 1; background: none; border: none; outline: none;
+  color: var(--text); font-size: 13px; font-family: inherit;
+}
+.tp-input::placeholder { color: var(--text3); }
+.tp-send {
+  width: 26px; height: 26px; border-radius: 6px; border: none;
+  background: var(--accent); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0; transition: background .12s;
+}
+.tp-send:hover { background: #d4975e; }
+.tp-send:disabled { background: var(--border2); opacity: .5; cursor: default; }
+
+/* ── Main Input ─────────────────────────────────────────────── */
+.input-wrap {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(transparent, var(--bg) 38%);
+  padding: 20px 32px 24px;
+  display: flex; justify-content: center;
+  pointer-events: none;
+}
+.input-box {
+  width: 580px; background: var(--bg2);
+  border: 1px solid var(--border2); border-radius: 14px;
+  overflow: hidden; pointer-events: all;
+  transition: border-color .15s;
+}
+.input-box:focus-within { border-color: #454545; }
+
+.spin {
+  width: 10px; height: 10px; flex-shrink: 0;
+  border: 1.5px solid rgba(201,138,82,.3);
+  border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.main-ta {
+  display: block; width: 100%;
+  background: none; border: none; outline: none;
+  color: var(--text); font-size: 15px; font-family: inherit;
+  line-height: 1.55; resize: none;
+  padding: 13px 14px 4px; min-height: 48px; max-height: 200px;
+}
+.main-ta::placeholder { color: var(--text3); }
+
+.input-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 10px 9px;
+}
+.model-lbl { font-size: 12px; color: var(--text3); display: flex; align-items: center; gap: 4px; }
+.main-send {
+  width: 30px; height: 30px; background: var(--text);
+  border: none; border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--bg); transition: background .12s;
+}
+.main-send:hover { background: #fff; }
+.main-send:disabled { background: var(--border2); color: var(--text3); cursor: default; }
+
+/* ── Summary status icon ───────────────────────────────────── */
+.summary-status-btn {
+  position: relative;
+  display: flex; align-items: center; gap: 4px;
+  padding: 0 8px; height: 28px; border-radius: 7px;
+  background: none; border: none; cursor: default;
+  font-size: 11.5px; font-weight: 500; font-family: inherit;
+  color: var(--accent);
+  transition: background .12s;
+}
+.summary-status-btn.summarizing { color: var(--accent); }
+.summary-status-btn .ssb-tip {
+  position: absolute; top: calc(100% + 7px); right: 0;
+  white-space: nowrap;
+  background: var(--bg3); border: 1px solid var(--border2);
+  border-radius: 6px; padding: 4px 10px;
+  font-size: 11.5px; color: var(--text2); font-weight: 400;
+  pointer-events: none; opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity .15s, transform .15s;
+  z-index: 100;
+}
+.summary-status-btn:hover .ssb-tip { opacity: 1; transform: translateY(0); }
+.ssb-spin {
+  width: 11px; height: 11px; flex-shrink: 0;
+  border: 1.5px solid rgba(201,138,82,.3);
+  border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .7s linear infinite;
+}
+
+/* ── Thread status button (header, Google Docs style) ──────── */
+.thread-status-btn {
+  position: relative;
+  display: flex; align-items: center; gap: 5px;
+  padding: 0 9px; height: 28px; border-radius: 7px;
+  background: none; border: none; cursor: pointer;
+  color: var(--text3);
+  font-size: 12px; font-weight: 500; font-family: inherit;
+  transition: background .12s, color .12s;
+}
+.thread-status-btn:hover { background: var(--bg3); color: var(--text2); }
+.thread-status-btn.active { color: var(--accent); }
+.thread-status-btn.active:hover { background: var(--adim); }
+
+.tsb-count {
+  font-size: 11.5px; font-weight: 600;
+  min-width: 10px; text-align: left;
+}
+
+/* Spinning ring replaces icon when summarizing */
+.tsb-spin {
+  width: 12px; height: 12px; flex-shrink: 0;
+  border: 1.5px solid rgba(201,138,82,.3);
+  border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .7s linear infinite;
+}
+
+/* Tooltip */
+.tsb-tip {
+  position: absolute; top: calc(100% + 7px); right: 0;
+  white-space: nowrap;
+  background: var(--bg3); border: 1px solid var(--border2);
+  border-radius: 6px; padding: 4px 10px;
+  font-size: 11.5px; color: var(--text2); font-weight: 400;
+  pointer-events: none; opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity .15s, transform .15s;
+  z-index: 100;
+}
+.thread-status-btn:hover .tsb-tip { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect, useCallback } = React;
+
+/* ── Demo messages ─────────────────────────────────────────── */
+const DEMO = [
+  {
+    id: 1, role: 'user',
+    content: 'Can you explain how transformers work in neural networks?'
+  },
+  {
+    id: 2, role: 'assistant',
+    blocks: [
+      {
+        id: 'b2a',
+        text: 'Transformers are a neural network architecture built around self-attention — a mechanism that lets every token directly attend to every other token in a sequence. Introduced in the 2017 paper "Attention Is All You Need," they\'ve since become the backbone of virtually every modern language model, image generator, and reasoning system.'
+      },
+      {
+        id: 'b2b',
+        text: 'The self-attention mechanism computes query, key, and value projections for each token, then uses a scaled dot-product to generate a weighted combination of all value vectors. Because this computation happens in parallel across the entire sequence — not step-by-step like an RNN — transformers train dramatically faster at scale.'
+      },
+      {
+        id: 'b2c',
+        text: 'Each transformer layer stacks multi-head attention with a feed-forward sublayer. Running attention several times in parallel with different learned weight matrices lets the model capture distinct relationship types simultaneously: syntactic structure, semantic similarity, and long-range dependencies, all in a single pass.'
+      },
+    ]
+  },
+  {
+    id: 3, role: 'user',
+    content: 'Why do transformers need positional encoding?'
+  },
+  {
+    id: 4, role: 'assistant',
+    blocks: [
+      {
+        id: 'b4a',
+        text: 'Because self-attention treats input as an unordered set, the model has no inherent sense of sequence — "dog bites man" and "man bites dog" produce identical attention inputs without positional information. Positional encodings fix this by adding a position-dependent signal to each token\'s embedding before it enters the first layer.'
+      },
+      {
+        id: 'b4b',
+        text: 'The original paper used fixed sinusoidal functions at different frequencies — a clever design that lets the model generalize to sequences longer than those seen during training. Modern models often learn positional embeddings directly, or use relative-position schemes like RoPE (Rotary Position Embedding) that encode relative distance inside the attention computation itself, giving better length generalization.'
+      },
+    ]
+  },
+];
+
+/* ── SVG icons ─────────────────────────────────────────────── */
+const IcoComment = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M13.5 2h-11a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1H6l2 2.5L10 11h3.5a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/>
+  </svg>
+);
+const IcoClose = () => (
+  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <line x1="1.5" y1="1.5" x2="8.5" y2="8.5"/>
+    <line x1="8.5" y1="1.5" x2="1.5" y2="8.5"/>
+  </svg>
+);
+const IcoInclude = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9.5 5.5a3 3 0 0 1 0 5l-1 1a3 3 0 0 1-4.24-4.24L5 6.5"/>
+    <path d="M6.5 10.5a3 3 0 0 1 0-5l1-1a3 3 0 0 1 4.24 4.24L11 9.5"/>
+  </svg>
+);
+const IcoExclude = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9.5 5.5a3 3 0 0 1 0 5l-1 1a3 3 0 0 1-4.24-4.24L5 6.5" strokeOpacity=".45"/>
+    <path d="M6.5 10.5a3 3 0 0 1 0-5l1-1a3 3 0 0 1 4.24 4.24L11 9.5" strokeOpacity=".45"/>
+    <line x1="2.5" y1="2.5" x2="13.5" y2="13.5" strokeWidth="1.6"/>
+  </svg>
+);
+const IcoSend = () => (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M14.44.44a1.5 1.5 0 0 0-1.63-.35L1.1 5.15a1.5 1.5 0 0 0 0 2.79l4.57 1.87v3.7a1.5 1.5 0 0 0 2.64.98l1.6-1.94 3.02 1.22a1.5 1.5 0 0 0 1.9-.93l2-9A1.5 1.5 0 0 0 14.44.44z"/>
+  </svg>
+);
+const IcoChain = () => (
+  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9.5 5.5a3 3 0 0 1 0 5l-1 1a3 3 0 0 1-4.24-4.24L5 6.5"/>
+    <path d="M6.5 10.5a3 3 0 0 1 0-5l1-1a3 3 0 0 1 4.24 4.24L11 9.5"/>
+  </svg>
+);
+const IcoDot = () => (
+  <svg width="6" height="6" viewBox="0 0 6 6" fill="currentColor">
+    <circle cx="3" cy="3" r="3"/>
+  </svg>
+);
+
+/* ── Helper: offset relative to ancestor ───────────────────── */
+function offsetFromAncestor(el, ancestor) {
+  let top = 0, curr = el;
+  for (let i = 0; i < 30 && curr && curr !== ancestor; i++) {
+    top += curr.offsetTop;
+    curr = curr.offsetParent;
+  }
+  return top;
+}
+
+/* ── ThreadPanel ───────────────────────────────────────────── */
+function ThreadPanel({ thread, topPx, isActive, onActivate, onClose, onSend, onToggle, setPanelRef }) {
+  const [val, setVal] = useState('');
+  const msgsRef = useRef(null);
+
+  useEffect(() => {
+    if (msgsRef.current) {
+      msgsRef.current.scrollTop = msgsRef.current.scrollHeight;
+    }
+  }, [thread.messages.length, thread.isTyping]);
+
+  const send = () => {
+    const t = val.trim();
+    if (!t || thread.isTyping) return;
+    setVal('');
+    onSend(t);
+  };
+
+  const hasMessages = thread.messages.length > 0 || thread.isTyping;
+
+  return (
+    <div
+      className={`tp${isActive ? ' active' : ''}`}
+      style={{ top: Math.max(0, topPx) }}
+      ref={setPanelRef}
+      onMouseDown={onActivate}
+    >
+      <div className="tp-head">
+        <div className="tp-quote">"{thread.blockText}"</div>
+        <div className="tp-actions">
+          <button
+            className={`tp-btn${thread.included ? ' on' : ''}`}
+            title={thread.included ? 'Exclude from main chat summary' : 'Include in main chat summary'}
+            onClick={e => { e.stopPropagation(); onToggle(); }}
+          >
+            {thread.included ? <IcoInclude /> : <IcoExclude />}
+          </button>
+          <button className="tp-btn" title="Close thread" onClick={e => { e.stopPropagation(); onClose(); }}>
+            <IcoClose />
+          </button>
+        </div>
+      </div>
+
+      {hasMessages && (
+        <div className="tp-msgs" ref={msgsRef}>
+          {thread.messages.map((m, i) => (
+            <div key={i} className={`tp-msg ${m.role}`}>{m.content}</div>
+          ))}
+          {thread.isTyping && (
+            <div className="tp-typing"><span/><span/><span/></div>
+          )}
+        </div>
+      )}
+
+      <div className="tp-input-row">
+        <input
+          className="tp-input"
+          placeholder={hasMessages ? 'Reply…' : 'Ask about this…'}
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); }}}
+          onClick={e => e.stopPropagation()}
+          autoFocus={isActive}
+        />
+        <button className="tp-send" disabled={!val.trim() || thread.isTyping} onClick={e => { e.stopPropagation(); send(); }}>
+          <IcoSend />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Block ─────────────────────────────────────────────────── */
+function Block({ block, thread, isActive, onOpen, setRef }) {
+  const [hov, setHov] = useState(false);
+  const lit = !!thread;
+  const cls = `blk${lit ? ' lit' : ''}${isActive ? ' active-thread' : ''}`;
+
+  return (
+    <div
+      className={cls}
+      ref={setRef}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+    >
+      <span>{block.text}</span>
+      {lit && (
+        <span className="blk-dot" onClick={() => onOpen(block.id, block.text)} title="Open thread">
+          <IcoDot />
+        </span>
+      )}
+      {!lit && (
+        <button
+          className="blk-btn"
+          style={{ opacity: hov ? 1 : 0, pointerEvents: hov ? 'all' : 'none' }}
+          onClick={() => onOpen(block.id, block.text)}
+          title="Open thread"
+        >
+          <IcoComment />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ── Message ───────────────────────────────────────────────── */
+function Message({ msg, threads, activeThread, onOpenThread, blockRefs }) {
+  if (msg.role === 'user') {
+    return (
+      <div className="msg-group">
+        <div className="user-row">
+          <div className="user-bubble">{msg.content}</div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="msg-group">
+      {msg.blocks.map(block => {
+        const thread = threads.find(t => t.blockId === block.id);
+        return (
+          <Block
+            key={block.id}
+            block={block}
+            thread={thread || null}
+            isActive={thread && activeThread === thread.id}
+            onOpen={onOpenThread}
+            setRef={el => { if (el) blockRefs.current.set(block.id, el); }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── ThreadCountBtn — comment bubble + count ─────────────────── */
+function ThreadCountBtn({ threadCount }) {
+  if (threadCount === 0) return null;
+  return (
+    <button className="thread-status-btn" tabIndex={-1}>
+      <IcoComment />
+      <span className="tsb-count">{threadCount}</span>
+      <span className="tsb-tip">{threadCount} open thread{threadCount !== 1 ? 's' : ''}</span>
+    </button>
+  );
+}
+
+/* ── SummaryStatusBtn — separate summarization indicator ──────── */
+function SummaryStatusBtn({ status, includedCount }) {
+  if (status === 'idle' && includedCount === 0) return null;
+  const isSummarizing = status === 'summarizing';
+  const tipText = isSummarizing
+    ? 'Summarizing threads…'
+    : `${includedCount} thread summar${includedCount === 1 ? 'y' : 'ies'} included in context`;
+  return (
+    <span className={`summary-status-btn${isSummarizing ? ' summarizing' : ''}`}>
+      {isSummarizing ? <span className="ssb-spin" /> : <IcoChain />}
+      <span className="ssb-tip">{tipText}</span>
+    </span>
+  );
+}
+
+/* ── App ───────────────────────────────────────────────────── */
+function App() {
+  const [messages, setMessages]         = useState(DEMO);
+  const [threads, setThreads]           = useState([]);
+  const [activeThread, setActiveThread] = useState(null);
+  const [summaryStatus, setSummaryStatus] = useState('idle');
+  const [mainVal, setMainVal]           = useState('');
+  const [renderTick, setRenderTick]     = useState(0);
+
+  const blockRefs   = useRef(new Map());
+  const panelRefs   = useRef(new Map());
+  const chatColRef  = useRef(null);
+  const scrollRef   = useRef(null);
+  const taRef       = useRef(null);
+  const threadsRef  = useRef(threads);
+  threadsRef.current = threads;
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
+  // Tick after DOM updates so thread positions stay fresh
+  useEffect(() => {
+    const id = setTimeout(() => setRenderTick(t => t + 1), 30);
+    return () => clearTimeout(id);
+  }, [threads.length, messages.length]);
+
+  const getTop = (blockId) => {
+    const el = blockRefs.current.get(blockId);
+    const anc = chatColRef.current;
+    if (!el || !anc) return 0;
+    return offsetFromAncestor(el, anc);
+  };
+
+  // Collision-free positions: push down, then center each stacked group
+  const computePositions = () => {
+    const open = threads.filter(t => t.isOpen);
+    if (!open.length) return {};
+    const GAP = 10;
+
+    const items = open
+      .map(t => ({
+        id: t.id,
+        natural: getTop(t.blockId),
+        height: panelRefs.current.get(t.id)?.offsetHeight ?? 110,
+      }))
+      .sort((a, b) => a.natural - b.natural);
+
+    // Pass 1: greedy downward push
+    let cursor = -Infinity;
+    const placed = items.map(item => {
+      const top = Math.max(item.natural, cursor);
+      cursor = top + item.height + GAP;
+      return { ...item, placed: top };
+    });
+
+    // Pass 2: group consecutive displaced panels and center each group
+    const pos = {};
+    let i = 0;
+    while (i < placed.length) {
+      // Find the contiguous group starting here
+      let j = i;
+      while (j + 1 < placed.length && placed[j + 1].placed > placed[j + 1].natural) j++;
+      const group = placed.slice(i, j + 1);
+
+      if (group.length === 1) {
+        pos[group[0].id] = group[0].placed;
+      } else {
+        // Total height of group
+        const totalH = group.reduce((s, g) => s + g.height, 0) + GAP * (group.length - 1);
+        // Center around midpoint of first and last natural positions
+        const midNatural = (group[0].natural + group[group.length - 1].natural) / 2;
+        let groupTop = Math.max(0, midNatural - totalH / 2);
+        for (const item of group) {
+          pos[item.id] = groupTop;
+          groupTop += item.height + GAP;
+        }
+      }
+      i = j + 1;
+    }
+    return pos;
+  };
+  const positions = computePositions();
+
+  /* open / focus thread */
+  const openThread = useCallback((blockId, blockText) => {
+    const ex = threadsRef.current.find(t => t.blockId === blockId);
+    if (ex) {
+      setThreads(prev => prev.map(t => t.id === ex.id ? { ...t, isOpen: true } : t));
+      setActiveThread(ex.id);
+      return;
+    }
+    const newT = {
+      id: Date.now(),
+      blockId,
+      blockText: blockText.length > 130 ? blockText.slice(0, 127) + '…' : blockText,
+      messages: [],
+      included: true,
+      isTyping: false,
+      isOpen: true,
+    };
+    setThreads(prev => [...prev, newT]);
+    setActiveThread(newT.id);
+  }, []);
+
+  /* close thread panel (keep if it has messages) */
+  const closeThread = useCallback((threadId) => {
+    setThreads(prev => prev.map(t =>
+      t.id === threadId
+        ? t.messages.length > 0 ? { ...t, isOpen: false } : null
+        : t
+    ).filter(Boolean));
+    setActiveThread(id => id === threadId ? null : id);
+  }, []);
+
+  const toggleInclude = useCallback((threadId) => {
+    setThreads(prev => prev.map(t => t.id === threadId ? { ...t, included: !t.included } : t));
+  }, []);
+
+  /* send message in thread → Claude */
+  const sendInThread = useCallback(async (threadId, userText) => {
+    const thread = threadsRef.current.find(t => t.id === threadId);
+    if (!thread) return;
+
+    setThreads(prev => prev.map(t =>
+      t.id === threadId
+        ? { ...t, messages: [...t.messages, { role: 'user', content: userText }], isTyping: true }
+        : t
+    ));
+
+    const history = thread.messages.map(m => `${m.role}: ${m.content}`).join('\n');
+    const prompt = `You are a concise assistant in a threaded discussion. Reply in 1–3 sentences maximum. Do not repeat or quote the passage.
+
+Passage being discussed: "${thread.blockText}"
+
+${history ? `Previous messages:\n${history}\n\n` : ''}User: ${userText}`;
+
+    try {
+      const reply = await window.claude.complete(prompt);
+      setThreads(prev => prev.map(t =>
+        t.id === threadId
+          ? { ...t, messages: [...t.messages, { role: 'assistant', content: reply }], isTyping: false }
+          : t
+      ));
+    } catch {
+      setThreads(prev => prev.map(t =>
+        t.id === threadId
+          ? { ...t, messages: [...t.messages, { role: 'assistant', content: 'Couldn\'t respond right now.' }], isTyping: false }
+          : t
+      ));
+    }
+  }, []);
+
+  /* send main chat message */
+  const sendMain = useCallback(async (text) => {
+    if (!text.trim()) return;
+    setMainVal('');
+    if (taRef.current) taRef.current.style.height = 'auto';
+
+    const userMsg = { id: Date.now(), role: 'user', content: text };
+    setMessages(prev => [...prev, userMsg]);
+
+    // Summary status flow
+    const includedThreads = threadsRef.current.filter(t => t.included && t.messages.length > 0);
+    if (includedThreads.length > 0) {
+      setSummaryStatus('summarizing');
+      await new Promise(r => setTimeout(r, 1800));
+      setSummaryStatus('included');
+    }
+
+    // Build context
+    const threadCtx = includedThreads.length > 0
+      ? 'Active thread context:\n' + includedThreads.map(t =>
+          `  • On "${t.blockText.slice(0, 60)}…": ` +
+          t.messages.map(m => `[${m.role}] ${m.content}`).join(' → ')
+        ).join('\n') + '\n\n'
+      : '';
+
+    const historyMsgs = messagesRef.current.slice(-5).map(m => ({
+      role: m.role,
+      content: m.role === 'assistant' ? m.blocks.map(b => b.text).join(' ') : m.content,
+    }));
+
+    const prompt = `${threadCtx}You are a helpful assistant. Continue this conversation naturally.
+
+${historyMsgs.map(m => `${m.role}: ${m.content}`).join('\n')}
+user: ${text}`;
+
+    try {
+      const reply = await window.claude.complete(prompt);
+      const blocks = reply.split(/\n\n+/).filter(Boolean).map((p, i) => ({
+        id: `new_${Date.now()}_${i}`,
+        text: p,
+      }));
+      setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', blocks }]);
+    } catch {
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1, role: 'assistant',
+        blocks: [{ id: `err_${Date.now()}`, text: 'Something went wrong. Please try again.' }],
+      }]);
+    }
+  }, []);
+
+  const adjustTa = () => {
+    const ta = taRef.current;
+    if (ta) { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 200) + 'px'; }
+  };
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages.length]);
+
+  const openThreadCount = threads.filter(t => t.isOpen).length;
+  const includedCount   = threads.filter(t => t.included && t.messages.length > 0).length;
+
+  return (
+    <div className="app" onClick={() => setActiveThread(null)}>
+      {/* Header */}
+      <div className="hdr" onClick={e => e.stopPropagation()}>
+        <span className="hdr-title">New conversation</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <SummaryStatusBtn status={summaryStatus} includedCount={includedCount} />
+          <ThreadCountBtn threadCount={threads.length} />
+          <span className="hdr-share">Share</span>
+        </div>
+      </div>
+
+      {/* Scrollable content */}
+      <div className="scroll-area" ref={scrollRef}>
+        <div className="content-grid">
+
+          {/* Chat column */}
+          <div className="chat-col" ref={chatColRef}>
+            {messages.map(msg => (
+              <Message
+                key={msg.id}
+                msg={msg}
+                threads={threads}
+                activeThread={activeThread}
+                onOpenThread={openThread}
+                blockRefs={blockRefs}
+              />
+            ))}
+          </div>
+
+          {/* Thread zone — panels positioned here */}
+          <div className="thread-zone" onClick={e => e.stopPropagation()}>
+            {threads.filter(t => t.isOpen).map(thread => (
+              <ThreadPanel
+                key={thread.id}
+                thread={thread}
+                topPx={positions[thread.id] ?? getTop(thread.blockId)}
+                isActive={activeThread === thread.id}
+                onActivate={() => setActiveThread(thread.id)}
+                onClose={() => closeThread(thread.id)}
+                onSend={text => sendInThread(thread.id, text)}
+                onToggle={() => toggleInclude(thread.id)}
+                setPanelRef={el => { if (el) panelRefs.current.set(thread.id, el); else panelRefs.current.delete(thread.id); }}
+              />
+            ))}
+          </div>
+
+        </div>
+      </div>
+
+      {/* Main input */}
+      <div className="input-wrap" onClick={e => e.stopPropagation()}>
+        <div className="input-box">
+          <textarea
+            ref={taRef}
+            className="main-ta"
+            placeholder="Write a message…"
+            value={mainVal}
+            rows={1}
+            onChange={e => { setMainVal(e.target.value); adjustTa(); }}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMain(mainVal);
+              }
+            }}
+          />
+          <div className="input-foot">
+            <span className="model-lbl">Claude 4 Sonnet · Adaptive</span>
+            <button className="main-send" disabled={!mainVal.trim()} onClick={() => sendMain(mainVal)}>
+              <IcoSend />
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
