@@ -281,6 +281,36 @@ describe('stream monitoring', () => {
     messages.cleanup()
   })
 
+  it('emits CLAUDE_STREAM_COMPLETE early when isStreamDone returns true', async () => {
+    const originalFetch = vi.fn().mockResolvedValue(
+      makeResponse(makeStream('data: [DONE]')),
+    )
+    const adapter = {
+      ...makeAdapter(),
+      isStreamDone: vi.fn().mockReturnValue(true),
+    }
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+    const messages = collectMessages()
+
+    const body = { messages: [{ role: 'user', content: 'Hello' }] }
+    const response = await interceptFetch(COMPLETION_URL, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+
+    await response.text()
+
+    await vi.waitFor(() => {
+      expect(
+        messages.get().find((m) => m.type === CLAUDE_MSG.STREAM_COMPLETE),
+      ).toBeDefined()
+    }, { timeout: 200 })
+
+    expect(adapter.isStreamDone).toHaveBeenCalledWith('data: [DONE]')
+
+    messages.cleanup()
+  })
+
   it('emits CLAUDE_STREAM_COMPLETE for responses with no body', async () => {
     const originalFetch = vi.fn().mockResolvedValue(
       new Response(null, { status: 200 }),

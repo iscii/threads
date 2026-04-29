@@ -33,7 +33,8 @@ export function createFetchWatcher(
     try {
       body = JSON.parse(init.body as string)
     } catch {
-      // non-JSON body — pass through unmodified
+      // Non-JSON body: adapter.inject only understands structured bodies, so skip
+      // injection and keep staged summaries for the next request.
     }
 
     window.postMessage(
@@ -67,14 +68,12 @@ export function createFetchWatcher(
 
     void (async () => {
       const reader = s2.getReader()
+      const decoder = new TextDecoder()
       try {
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-          if (
-            value !== undefined &&
-            adapter.isStreamDone?.(new TextDecoder().decode(value))
-          ) {
+          if (value !== undefined && adapter.isStreamDone?.(decoder.decode(value))) {
             break
           }
         }
