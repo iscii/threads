@@ -12,6 +12,7 @@ export function createFetchWatcher(
     const data = event.data as { type?: string; summaryTexts?: string[] }
     if (data?.type === MSG.STAGE_SUMMARY) {
       stagedSummaries = data.summaryTexts ?? []
+      console.debug('[fw] summaries staged:', stagedSummaries)
     }
   }
 
@@ -44,8 +45,11 @@ export function createFetchWatcher(
     let injected = false
     let modifiedInit = init
 
+    console.debug('[fw] intercept:', { url, stagedCount: stagedSummaries.length, bodyParsed: body !== null })
+
     if (stagedSummaries.length > 0 && body !== null) {
       const modified = adapter.inject(body, stagedSummaries)
+      console.debug('[fw] inject result:', modified === null ? 'null (body format unrecognized)' : 'modified')
       if (modified !== null) {
         modifiedInit = { ...init, body: JSON.stringify(modified) }
         stagedSummaries = []
