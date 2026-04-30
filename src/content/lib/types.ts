@@ -21,7 +21,7 @@ export interface DOMLayerCallbacks {
 export interface DOMLayerAPI {
   /** Wraps block elements, injects trigger buttons, shows zone. Called by coordinator on onBlocksFound. */
   instrumentBlocks(blocks: BlockDescriptor[]): void
-  /** Returns the shadow root of the thread zone host for Preact rendering. */
+  /** Returns the shadow root of the thread zone host for Preact rendering. Always non-null — shadow root is attached during construction. */
   getShadowRoot(): ShadowRoot
   /** Sets data-thr-state on the block wrapper for the styling layer to read. */
   setBlockState(blockId: string, state: 'idle' | 'has-thread' | 'active'): void
