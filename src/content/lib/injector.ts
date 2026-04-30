@@ -38,13 +38,16 @@ export function createInjector(
   }
 
   function instrumentBlocks(descs: BlockDescriptor[]): void {
+    let instrumented = 0
     for (const desc of descs) {
       if (blocks.has(desc.id)) continue
 
       const p = desc.element
+      if (!p.parentNode) continue
+
       const wrapper = document.createElement('div')
       wrapper.dataset.thrId = desc.id
-      p.parentNode!.insertBefore(wrapper, p)
+      p.parentNode.insertBefore(wrapper, p)
       wrapper.appendChild(p)
 
       const btn = document.createElement('button')
@@ -56,9 +59,10 @@ export function createInjector(
       wrapper.appendChild(btn)
 
       blocks.set(desc.id, { wrapper, blockEl: p })
+      instrumented++
     }
 
-    if (host.style.display === 'none') {
+    if (instrumented > 0 && host.style.display === 'none') {
       host.style.display = ''
     }
 
@@ -102,6 +106,12 @@ export function createInjector(
       const entry = blocks.get(id)
       if (!entry) return 0
       return entry.wrapper.getBoundingClientRect().top
+    },
+
+    destroy() {
+      resizeObserver?.disconnect()
+      resizeObserver = null
+      host.remove()
     },
   }
 }

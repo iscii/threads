@@ -189,3 +189,41 @@ describe('getBlockTop', () => {
     expect(injector.getBlockTop('unknown')).toBe(0)
   })
 })
+
+describe('instrumentBlocks edge cases', () => {
+  it('skips detached block elements without throwing', () => {
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    const p = makeBlock('Detached')
+    // p is not appended to any parent — parentNode is null
+    expect(() => injector.instrumentBlocks([makeDescriptor(p, 'detached')])).not.toThrow()
+  })
+
+  it('does not show zone when all descriptors are detached', () => {
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    const p = makeBlock()
+    injector.instrumentBlocks([makeDescriptor(p, 'detached2')])
+    const host = document.body.querySelector<HTMLElement>('[data-thr-zone]')!
+    expect(host.style.display).toBe('none')
+  })
+
+  it('does not show zone when instrumentBlocks called with empty array', () => {
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    injector.instrumentBlocks([])
+    const host = document.body.querySelector<HTMLElement>('[data-thr-zone]')!
+    expect(host.style.display).toBe('none')
+  })
+})
+
+describe('destroy', () => {
+  it('removes the host from document.body', () => {
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    expect(document.body.querySelector('[data-thr-zone]')).not.toBeNull()
+    injector.destroy()
+    expect(document.body.querySelector('[data-thr-zone]')).toBeNull()
+  })
+
+  it('is safe to call multiple times', () => {
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    expect(() => { injector.destroy(); injector.destroy() }).not.toThrow()
+  })
+})

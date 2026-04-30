@@ -29,4 +29,6 @@ export interface DOMLayerAPI {
   setDotVisible(blockId: string, visible: boolean): void
   /** Returns the viewport-relative top of the block wrapper. */
   getBlockTop(blockId: string): number
+  /** Disconnects the ResizeObserver and removes the host from the DOM. Call on conversation change. */
+  destroy(): void
 }
