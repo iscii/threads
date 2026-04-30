@@ -3,14 +3,23 @@ import { claudeDOMAdapter } from './dom'
 describe('findScrollContainer', () => {
   afterEach(() => { document.body.innerHTML = '' })
 
-  it('finds the element with overflow-y-auto and pt-6 classes', () => {
-    const el = document.createElement('div')
-    el.className = 'overflow-y-auto overflow-x-hidden pt-6 flex-1'
-    document.body.appendChild(el)
-    expect(claudeDOMAdapter.findScrollContainer()).toBe(el)
+  it('returns the overflow-y:auto ancestor of a [data-is-streaming] turn', () => {
+    const container = document.createElement('div')
+    container.style.overflowY = 'auto'
+    const turn = document.createElement('div')
+    turn.setAttribute('data-is-streaming', 'false')
+    container.appendChild(turn)
+    document.body.appendChild(container)
+    expect(claudeDOMAdapter.findScrollContainer()).toBe(container)
   })
 
-  it('returns null when not present', () => {
+  it('falls back to <main> when no turns are present', () => {
+    const main = document.createElement('main')
+    document.body.appendChild(main)
+    expect(claudeDOMAdapter.findScrollContainer()).toBe(main)
+  })
+
+  it('returns null when neither turns nor <main> are present', () => {
     expect(claudeDOMAdapter.findScrollContainer()).toBeNull()
   })
 })
