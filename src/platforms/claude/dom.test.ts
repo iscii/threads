@@ -82,6 +82,10 @@ describe('findInput', () => {
     document.body.appendChild(el)
     expect(claudeDOMAdapter.findInput()).toBe(el)
   })
+
+  it('returns null when not present', () => {
+    expect(claudeDOMAdapter.findInput()).toBeNull()
+  })
 })
 
 describe('findHeader', () => {

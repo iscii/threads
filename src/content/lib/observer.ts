@@ -37,6 +37,7 @@ export function createObserver(
   }
 
   function initTier2(): void {
+    tier2?.disconnect()
     const scrollContainer = adapter.findScrollContainer()
     if (!scrollContainer) return
 
