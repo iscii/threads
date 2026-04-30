@@ -7,6 +7,7 @@ interface BlockEntry {
 
 export function createInjector(
   callbacks: Pick<DOMLayerCallbacks, 'onBlockTriggerClicked' | 'onDotClicked'>,
+  findScrollContainer: () => Element | null = () => null,
 ): DOMLayerAPI {
   const host = document.createElement('div')
   host.dataset.thrZone = ''
@@ -69,9 +70,7 @@ export function createInjector(
     updateZoneLeft()
 
     if (!resizeObserver) {
-      const scrollContainer = document.querySelector(
-        'div[class*="overflow-y-auto"][class*="pt-6"]',
-      )
+      const scrollContainer = findScrollContainer()
       if (scrollContainer) {
         resizeObserver = new ResizeObserver(updateZoneLeft)
         resizeObserver.observe(scrollContainer)
