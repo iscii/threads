@@ -233,6 +233,22 @@ describe('navigation', () => {
     expect(onConversationChanged).toHaveBeenCalledOnce()
   })
 
+  it('stop() calls the cleanup returned by listenNavigation', () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+
+    const cleanup = vi.fn()
+    const obs = createObserver(
+      makeAdapter(container),
+      { onBlocksFound: vi.fn(), onConversationChanged: vi.fn() },
+      () => cleanup,
+    )
+    obs.start()
+    obs.stop()
+
+    expect(cleanup).toHaveBeenCalledOnce()
+  })
+
   it('re-instruments turns from the new conversation after handleNavigation', () => {
     const container = document.createElement('div')
     container.appendChild(makeTurn(false, ['Old turn']))

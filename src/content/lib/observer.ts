@@ -5,17 +5,21 @@ import { hashText } from './hash'
 export function createObserver(
   adapter: DOMAdapter,
   callbacks: Pick<DOMLayerCallbacks, 'onBlocksFound' | 'onConversationChanged'>,
-  /**
-   * Injectable nav listener for testing. Production default uses window.navigation.
-   * Accepts a callback to invoke on each navigation event.
-   */
-  listenNavigation: (handler: () => void) => void = (h) => {
-    ;(window as unknown as { navigation?: { addEventListener(e: string, fn: () => void): void } })
-      .navigation
-      ?.addEventListener('navigate', h)
+  listenNavigation: (handler: () => void) => (() => void) | void = (h) => {
+    const nav = (
+      window as unknown as {
+        navigation?: {
+          addEventListener(e: string, fn: () => void): void
+          removeEventListener(e: string, fn: () => void): void
+        }
+      }
+    ).navigation
+    nav?.addEventListener('navigate', h)
+    return () => nav?.removeEventListener('navigate', h)
   },
 ) {
   let tier2: MutationObserver | null = null
+  let stopNavigation: (() => void) | void
   let instrumented = new WeakSet<Element>()
 
   function toDescriptor(el: Element): BlockDescriptor {
@@ -84,9 +88,16 @@ export function createObserver(
   }
 
   function start(): void {
-    listenNavigation(handleNavigation)
+    stopNavigation = listenNavigation(handleNavigation)
     initTier2()
   }
 
-  return { start, handleNavigation }
+  function stop(): void {
+    stopNavigation?.()
+    stopNavigation = undefined
+    tier2?.disconnect()
+    tier2 = null
+  }
+
+  return { start, handleNavigation, stop }
 }

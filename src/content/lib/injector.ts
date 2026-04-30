@@ -111,6 +111,7 @@ export function createInjector(
     destroy() {
       resizeObserver?.disconnect()
       resizeObserver = null
+      blocks.clear()
       host.remove()
     },
   }
