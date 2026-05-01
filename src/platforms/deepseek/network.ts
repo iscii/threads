@@ -7,6 +7,6 @@ export const deepseekAdapter: NetworkAdapter = {
     summaryInjected: 'DEEPSEEK_SUMMARY_INJECTED',
     streamComplete: 'DEEPSEEK_STREAM_COMPLETE',
   },
-  inject(body) { return { body, injected: false } },
+  inject(body, _summaries) { return { body, injected: false } },
   buildCompletion(capturedBody) { return capturedBody },
 }

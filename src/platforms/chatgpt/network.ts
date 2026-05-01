@@ -7,6 +7,6 @@ export const chatgptAdapter: NetworkAdapter = {
     summaryInjected: 'CHATGPT_SUMMARY_INJECTED',
     streamComplete: 'CHATGPT_STREAM_COMPLETE',
   },
-  inject(body) { return { body, injected: false } },
+  inject(body, _summaries) { return { body, injected: false } },
   buildCompletion(capturedBody) { return capturedBody },
 }
