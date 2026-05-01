@@ -1,4 +1,5 @@
-import { highWaterMarks, summaryQueue, dirtyThreads, advanceMarks, enqueue, drainQueue } from './summaryStore'
+import { highWaterMarks, summaryQueue, dirtyThreads, advanceMarks, enqueue, drainQueue, loadSummaryForConv } from './summaryStore'
+import { summaryKey } from './keys'
 import { threads } from './threads'
 import type { Thread } from './threads'
 
@@ -34,6 +35,7 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
+  vi.clearAllMocks()
   threads.value = []
   highWaterMarks.value = {}
   summaryQueue.value = []
@@ -64,6 +66,7 @@ describe('advanceMarks', () => {
     advanceMarks()
     expect(highWaterMarks.value['a']).toBe(3)
     expect(highWaterMarks.value['b']).toBeUndefined()
+    expect(chrome.storage.local.set).toHaveBeenCalled()
   })
 })
 
@@ -75,5 +78,28 @@ describe('drainQueue', () => {
     expect(drained).toHaveLength(2)
     expect(drained[0].text).toBe('sum1')
     expect(summaryQueue.value).toHaveLength(0)
+    expect(chrome.storage.local.set).toHaveBeenCalled()
+  })
+})
+
+describe('loadSummaryForConv', () => {
+  it('leaves signals at defaults when storage returns empty object', async () => {
+    vi.mocked(chrome.storage.local.get).mockResolvedValueOnce({})
+    await loadSummaryForConv()
+    expect(highWaterMarks.value).toEqual({})
+    expect(summaryQueue.value).toEqual([])
+  })
+
+  it('populates signals from stored data', async () => {
+    const key = summaryKey()
+    vi.mocked(chrome.storage.local.get).mockResolvedValueOnce({
+      [key]: {
+        highWaterMarks: { a: 2 },
+        summaryQueue: [{ text: 'x', coveredTurnCounts: {}, generatedAt: 0 }],
+      },
+    })
+    await loadSummaryForConv()
+    expect(highWaterMarks.value).toEqual({ a: 2 })
+    expect(summaryQueue.value).toEqual([{ text: 'x', coveredTurnCounts: {}, generatedAt: 0 }])
   })
 })

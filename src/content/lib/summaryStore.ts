@@ -53,6 +53,8 @@ export async function loadSummaryForConv(): Promise<void> {
   const data = result[key] as
     | { highWaterMarks?: Record<string, number>; summaryQueue?: SummaryItem[] }
     | undefined
-  highWaterMarks.value = data?.highWaterMarks ?? {}
-  summaryQueue.value = data?.summaryQueue ?? []
+  highWaterMarks.value = (data?.highWaterMarks && typeof data.highWaterMarks === 'object' && !Array.isArray(data.highWaterMarks))
+    ? data.highWaterMarks as Record<string, number>
+    : {}
+  summaryQueue.value = Array.isArray(data?.summaryQueue) ? data.summaryQueue as SummaryItem[] : []
 }
