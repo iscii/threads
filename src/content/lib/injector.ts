@@ -8,6 +8,7 @@ interface BlockEntry {
 export function createInjector(
   callbacks: Pick<DOMLayerCallbacks, 'onBlockTriggerClicked' | 'onDotClicked'>,
   findScrollContainer: () => Element | null = () => null,
+  findHeader: () => Element | null = () => null,
 ): DOMLayerAPI {
   const host = document.createElement('div')
   host.dataset.thrZone = ''
@@ -18,7 +19,7 @@ export function createInjector(
     width: '308px',
     pointerEvents: 'none',
     zIndex: '2147483600',
-    overflow: 'visible',
+    overflow: 'hidden',
     display: 'none',
   })
   document.body.appendChild(host)
@@ -26,6 +27,11 @@ export function createInjector(
 
   const blocks = new Map<string, BlockEntry>()
   let resizeObserver: ResizeObserver | null = null
+
+  function updateZoneTop(): void {
+    const headerBottom = findHeader()?.getBoundingClientRect().bottom ?? 0
+    host.style.top = `${headerBottom}px`
+  }
 
   function updateZoneLeft(): void {
     let rightmost = 0
@@ -67,14 +73,15 @@ export function createInjector(
       host.style.display = ''
     }
 
+    updateZoneTop()
     updateZoneLeft()
 
     if (!resizeObserver) {
+      resizeObserver = new ResizeObserver(() => { updateZoneTop(); updateZoneLeft() })
       const scrollContainer = findScrollContainer()
-      if (scrollContainer) {
-        resizeObserver = new ResizeObserver(updateZoneLeft)
-        resizeObserver.observe(scrollContainer)
-      }
+      if (scrollContainer) resizeObserver.observe(scrollContainer)
+      const header = findHeader()
+      if (header) resizeObserver.observe(header)
     }
   }
 

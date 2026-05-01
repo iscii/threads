@@ -40,11 +40,11 @@ export function App({ coordinator, domAdapter }: AppProps) {
   })
 
   useEffect(() => {
-    const sc = document.querySelector('[data-autoscroll-container]')
-    sc?.addEventListener('scroll', compute)
+    // capture:true catches scroll events on any descendant (scroll container may not exist at mount)
+    window.addEventListener('scroll', compute, true)
     window.addEventListener('resize', compute)
     return () => {
-      sc?.removeEventListener('scroll', compute)
+      window.removeEventListener('scroll', compute, true)
       window.removeEventListener('resize', compute)
     }
   }, [compute])

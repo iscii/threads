@@ -16,6 +16,7 @@ export function createCoordinator(domAdapter: DOMAdapter) {
   let injector = createInjector(
     { onBlockTriggerClicked, onDotClicked },
     () => domAdapter.findScrollContainer(),
+    () => domAdapter.findHeader(),
   )
 
   const observer = createObserver(domAdapter, { onBlocksFound, onConversationChanged })
