@@ -111,7 +111,8 @@ export function createInjector(
     getBlockTop(id) {
       const entry = blocks.get(id)
       if (!entry) return 0
-      return entry.wrapper.getBoundingClientRect().top
+      const hostTop = parseFloat(host.style.top) || 0
+      return entry.wrapper.getBoundingClientRect().top - hostTop
     },
 
     destroy() {
