@@ -1,8 +1,7 @@
 import { effect } from '@preact/signals'
 import { createObserver } from './observer'
 import { createInjector } from './injector'
-import { threads, activeId, endpointInfo, openThread, setActive } from './threads'
-import { loadThreadsForConv } from './threads'
+import { threads, activeId, endpointInfo, openThread, setActive, loadThreadsForConv } from './threads'
 import { loadSummaryForConv } from './summaryStore'
 import type { DOMAdapter } from '@/types'
 import type { BlockDescriptor } from './types'
@@ -22,7 +21,7 @@ export function createCoordinator(domAdapter: DOMAdapter) {
   const observer = createObserver(domAdapter, { onBlocksFound, onConversationChanged })
 
   // Keep injector DOM state in sync with thread signals
-  effect(() => {
+  const disposeEffect = effect(() => {
     for (const t of threads.value) {
       const state = t.isOpen ? 'active' : t.messages.length > 0 ? 'has-thread' : 'idle'
       injector.setBlockState(t.blockId, state)
@@ -77,6 +76,7 @@ export function createCoordinator(domAdapter: DOMAdapter) {
   }
 
   function stop(): void {
+    disposeEffect()
     observer.stop()
     started = false
   }
