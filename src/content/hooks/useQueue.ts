@@ -22,7 +22,8 @@ export async function sendThreadReply(threadId: string, userText: string): Promi
     `Reply in 1–3 sentences. Do not repeat or quote the passage. ` +
     `Passage: "${t.blockText}"`
 
-  const history = [...t.messages, { role: 'user' as const, content: userText }]
+  const fresh = threads.value.find(t => t.id === threadId)
+  const history = (fresh?.messages ?? [])
     .map(m => `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`)
     .join('\n')
   const prompt = `${systemPrompt}\n\n${history}\n\nAssistant:`

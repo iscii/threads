@@ -37,8 +37,6 @@ export async function triggerSummarization(): Promise<void> {
   const dirty = dirtyThreads()
   if (dirty.length === 0) return
 
-  advanceMarks()
-
   const prompt = buildSummarizationPrompt(dirty)
   const body = na.buildCompletion(info.body, prompt, 'claude-haiku-4-5-20251001')
 
@@ -56,6 +54,7 @@ export async function triggerSummarization(): Promise<void> {
       coveredTurnCounts: Object.fromEntries(dirty.map(t => [t.blockId, t.messages.length])),
       generatedAt: Date.now(),
     })
+    advanceMarks()
     window.postMessage(
       { type: MSG.STAGE_SUMMARY, summaryTexts: drainQueue().map(i => i.text) },
       location.origin,

@@ -18,14 +18,16 @@ export function App({ coordinator, domAdapter }: AppProps) {
   const panelRefs = useRef<Map<string, HTMLElement>>(new Map())
   const [positions, setPositions] = useState<Record<string, number>>({})
 
-  const compute = useCallback(() => {
+  const computeRef = useRef<() => void>(() => {})
+  computeRef.current = () => {
     const geoms: PanelGeometry[] = openThreads.value.map(t => ({
       id: t.id,
       top: coordinator.getBlockTop(t.blockId),
       height: panelRefs.current.get(t.id)?.offsetHeight ?? 200,
     }))
     setPositions(resolveCollisions(geoms))
-  }, [openThreads.value, coordinator])
+  }
+  const compute = useCallback(() => computeRef.current(), [])
 
   const registerRef = useCallback((id: string, el: HTMLElement) => {
     panelRefs.current.set(id, el)
