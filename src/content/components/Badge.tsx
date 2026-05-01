@@ -3,10 +3,13 @@ import { threads, summaryStatus } from '../lib/threads'
 
 function ChatBubbleIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <svg width="13" height="13" viewBox="0 0 12 12" fill="none">
       <path
-        d="M7 1C3.686 1 1 3.239 1 6c0 1.48.67 2.814 1.75 3.75L2 12l2.5-1.25C5.269 11.222 6.118 11.4 7 11.4c3.314 0 6-2.239 6-5S10.314 1 7 1z"
-        fill="currentColor"
+        d="M3 1.5h6a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5H4.5L2 11V3a1.5 1.5 0 0 1 1.5-1.5z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
       />
     </svg>
   )
@@ -15,8 +18,8 @@ function ChatBubbleIcon() {
 function ChainIcon({ spinning }: { spinning: boolean }) {
   return (
     <svg
-      width="14"
-      height="14"
+      width="13"
+      height="13"
       viewBox="0 0 14 14"
       fill="none"
       style={spinning ? { animation: 'spin 1s linear infinite' } : undefined}
@@ -32,7 +35,7 @@ function ChainIcon({ spinning }: { spinning: boolean }) {
 }
 
 export function Badge() {
-  const count = useComputed(() => threads.value.filter(t => t.isOpen).length)
+  const count = useComputed(() => threads.value.filter(t => t.messages.length > 0).length)
   const includedCount = useComputed(
     () => threads.value.filter(t => t.included && t.messages.length > 0).length,
   )
@@ -42,7 +45,7 @@ export function Badge() {
       {count.value > 0 && (
         <button
           class="thr-count-btn"
-          title={`${count.value} open thread${count.value !== 1 ? 's' : ''}`}
+          title={`${count.value} thread${count.value !== 1 ? 's' : ''} with messages`}
         >
           <ChatBubbleIcon />
           <span>{count.value}</span>

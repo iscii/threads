@@ -1,14 +1,16 @@
 import type { DOMLayerCallbacks, DOMLayerAPI, BlockDescriptor } from './types'
 
+const TRIGGER_SVG = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 1.5h6a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5H4.5L2 11V3a1.5 1.5 0 0 1 1.5-1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/></svg>`
+
 interface BlockEntry {
-  wrapper: HTMLElement
   blockEl: HTMLElement
 }
 
 export function createInjector(
-  callbacks: Pick<DOMLayerCallbacks, 'onBlockTriggerClicked' | 'onDotClicked'>,
+  callbacks: Pick<DOMLayerCallbacks, 'onBlockTriggerClicked'>,
   findScrollContainer: () => Element | null = () => null,
   findHeader: () => Element | null = () => null,
+  findChatContainer: () => Element | null = () => null,
 ): DOMLayerAPI {
   const host = document.createElement('div')
   host.dataset.thrZone = ''
@@ -34,13 +36,9 @@ export function createInjector(
   }
 
   function updateZoneLeft(): void {
-    let rightmost = 0
-    for (const { blockEl } of blocks.values()) {
-      const r = blockEl.getBoundingClientRect().right
-      if (r > rightmost) rightmost = r
-    }
-    if (rightmost > 0) {
-      host.style.left = `${rightmost + 20}px`
+    const container = findChatContainer() ?? findScrollContainer()
+    if (container) {
+      host.style.left = `${container.getBoundingClientRect().right + 8}px`
     }
   }
 
@@ -49,23 +47,23 @@ export function createInjector(
     for (const desc of descs) {
       if (blocks.has(desc.id)) continue
 
-      const p = desc.element
+      const p = desc.element as HTMLElement
       if (!p.parentNode) continue
 
-      const wrapper = document.createElement('div')
-      wrapper.dataset.thrId = desc.id
-      p.parentNode.insertBefore(wrapper, p)
-      wrapper.appendChild(p)
+      // Apply data-thr-id directly to the block element — no reparenting,
+      // so React's parent.removeChild(p) continues to work on resize.
+      p.dataset.thrId = desc.id
 
       const btn = document.createElement('button')
       btn.dataset.thrTrigger = ''
+      btn.innerHTML = TRIGGER_SVG
       btn.addEventListener('click', (e) => {
         e.stopPropagation()
         callbacks.onBlockTriggerClicked(desc.id)
       })
-      wrapper.appendChild(btn)
+      p.appendChild(btn)
 
-      blocks.set(desc.id, { wrapper, blockEl: p })
+      blocks.set(desc.id, { blockEl: p })
       instrumented++
     }
 
@@ -82,6 +80,8 @@ export function createInjector(
       if (scrollContainer) resizeObserver.observe(scrollContainer)
       const header = findHeader()
       if (header) resizeObserver.observe(header)
+      const chatContainer = findChatContainer()
+      if (chatContainer) resizeObserver.observe(chatContainer)
     }
   }
 
@@ -91,33 +91,24 @@ export function createInjector(
 
     setBlockState(id, state) {
       const entry = blocks.get(id)
-      if (entry) entry.wrapper.dataset.thrState = state
-    },
-
-    setDotVisible(id, visible) {
-      const entry = blocks.get(id)
-      if (!entry) return
-      const existing = entry.wrapper.querySelector('[data-thr-dot]')
-      if (visible && !existing) {
-        const dot = document.createElement('span')
-        dot.dataset.thrDot = ''
-        dot.addEventListener('click', () => callbacks.onDotClicked(id))
-        entry.blockEl.after(dot)
-      } else if (!visible && existing) {
-        existing.remove()
-      }
+      if (entry) entry.blockEl.dataset.thrState = state
     },
 
     getBlockTop(id) {
       const entry = blocks.get(id)
       if (!entry) return 0
       const hostTop = parseFloat(host.style.top) || 0
-      return entry.wrapper.getBoundingClientRect().top - hostTop
+      return entry.blockEl.getBoundingClientRect().top - hostTop
     },
 
     destroy() {
       resizeObserver?.disconnect()
       resizeObserver = null
+      for (const entry of blocks.values()) {
+        delete entry.blockEl.dataset.thrId
+        delete entry.blockEl.dataset.thrState
+        entry.blockEl.querySelectorAll('[data-thr-trigger]').forEach(b => b.remove())
+      }
       blocks.clear()
       host.remove()
     },
