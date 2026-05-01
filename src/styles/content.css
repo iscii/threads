@@ -6,7 +6,7 @@
   width: 308px;
   pointer-events: none;
   z-index: 2147483600;
-  overflow: visible;
+  overflow: hidden;
 }
 
 /* ── Thread panel ─────────────────────────────────────────────────── */
