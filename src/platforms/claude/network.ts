@@ -55,6 +55,19 @@ export const claudeAdapter: NetworkAdapter = {
     }
   },
 
+  buildCompletion(capturedBody: unknown, prompt: string, model?: string): unknown {
+    if (!isPromptBody(capturedBody)) return capturedBody
+    return {
+      ...capturedBody,
+      prompt,
+      ...(model ? { model } : {}),
+      turn_message_uuids: {
+        human_message_uuid: crypto.randomUUID(),
+        assistant_message_uuid: crypto.randomUUID(),
+      },
+    }
+  },
+
   history: {
     urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
 

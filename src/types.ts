@@ -6,6 +6,7 @@ export interface NetworkAdapter {
     streamComplete: string
   }
   inject(body: unknown, summaries: string[]): { body: unknown; injected: boolean }
+  buildCompletion(capturedBody: unknown, prompt: string, model?: string): unknown
   isStreamDone?(chunk: string): boolean
   history?: {
     urlPattern: RegExp
