@@ -5,7 +5,7 @@ beforeAll(() => {
     storage: {
       local: {
         set: vi.fn(),
-        get: vi.fn().mockResolvedValue({}),
+        get: vi.fn((_, cb) => cb && cb({})),
         remove: vi.fn(),
       },
     },
@@ -22,34 +22,37 @@ beforeEach(() => {
 })
 
 describe('openThread', () => {
-  it('creates a new thread and returns its id', () => {
-    const id = openThread('block1', 'Hello world')
+  it('creates a new thread and sets activeId', () => {
+    openThread('block1', 'Hello world')
     expect(threads.value).toHaveLength(1)
     expect(threads.value[0].blockId).toBe('block1')
     expect(threads.value[0].blockText).toBe('Hello world')
     expect(threads.value[0].isOpen).toBe(true)
-    expect(id).toBe(threads.value[0].id)
+    expect(activeId.value).toBe(threads.value[0].id)
   })
 
   it('reopens existing thread instead of creating a duplicate', () => {
-    const id1 = openThread('block1', 'Hello')
+    openThread('block1', 'Hello')
+    const id1 = threads.value[0].id
     threads.value = threads.value.map(t => ({ ...t, isOpen: false }))
-    const id2 = openThread('block1', 'Hello')
+    openThread('block1', 'Hello')
     expect(threads.value).toHaveLength(1)
     expect(threads.value[0].isOpen).toBe(true)
-    expect(id2).toBe(id1)
+    expect(activeId.value).toBe(id1)
   })
 })
 
 describe('closeThread', () => {
   it('removes thread with no messages', () => {
-    const id = openThread('b1', 'text')
+    openThread('b1', 'text')
+    const id = threads.value[0].id
     closeThread(id)
     expect(threads.value).toHaveLength(0)
   })
 
   it('keeps thread with messages and sets isOpen false', () => {
-    const id = openThread('b1', 'text')
+    openThread('b1', 'text')
+    const id = threads.value[0].id
     addMessage(id, { role: 'user', content: 'Q' })
     closeThread(id)
     expect(threads.value).toHaveLength(1)
@@ -59,7 +62,8 @@ describe('closeThread', () => {
 
 describe('addMessage', () => {
   it('appends messages in order', () => {
-    const id = openThread('b1', 'text')
+    openThread('b1', 'text')
+    const id = threads.value[0].id
     addMessage(id, { role: 'user', content: 'Q' })
     addMessage(id, { role: 'assistant', content: 'A' })
     expect(threads.value[0].messages).toHaveLength(2)

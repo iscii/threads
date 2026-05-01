@@ -18,18 +18,28 @@ export const activeId = signal<string | null>(null)
 export const summaryStatus = signal<'idle' | 'summarizing' | 'included'>('idle')
 export const endpointInfo = signal<{ url: string; body: unknown } | null>(null)
 
-function persist(t: Thread): void {
-  chrome.storage.local.set({ [threadKey(t.blockId)]: t })
+function persist(): void {
+  const current = threads.value
+  const validKeys = new Set(current.map(t => threadKey(t.id)))
+  const entries: Record<string, Thread> = {}
+  for (const t of current) entries[threadKey(t.id)] = t
+  chrome.storage.local.set(entries)
+  chrome.storage.local.get(null, (all) => {
+    const prefix = `thr:${convId()}:`
+    const stale = Object.keys(all).filter(k => k.startsWith(prefix) && !validKeys.has(k))
+    if (stale.length) chrome.storage.local.remove(stale)
+  })
 }
 
-export function openThread(blockId: string, blockText: string): string {
+export function openThread(blockId: string, blockText: string): void {
   const existing = threads.value.find(t => t.blockId === blockId)
   if (existing) {
     threads.value = threads.value.map(t =>
       t.blockId === blockId ? { ...t, isOpen: true } : t
     )
-    persist({ ...existing, isOpen: true })
-    return existing.id
+    activeId.value = existing.id
+    persist()
+    return
   }
   const t: Thread = {
     id: crypto.randomUUID(),
@@ -41,8 +51,8 @@ export function openThread(blockId: string, blockText: string): string {
     isOpen: true,
   }
   threads.value = [...threads.value, t]
-  persist(t)
-  return t.id
+  activeId.value = t.id
+  persist()
 }
 
 export function closeThread(id: string): void {
@@ -50,34 +60,32 @@ export function closeThread(id: string): void {
   if (!t) return
   if (t.messages.length === 0) {
     threads.value = threads.value.filter(t => t.id !== id)
-    chrome.storage.local.remove(threadKey(t.blockId))
+    persist()
   } else {
-    const updated = { ...t, isOpen: false }
-    threads.value = threads.value.map(t => t.id === id ? updated : t)
-    persist(updated)
+    threads.value = threads.value.map(t => t.id === id ? { ...t, isOpen: false } : t)
+    persist()
   }
 }
 
 export function addMessage(id: string, msg: ThreadMsg): void {
   threads.value = threads.value.map(t => {
     if (t.id !== id) return t
-    const updated = { ...t, messages: [...t.messages, msg] }
-    persist(updated)
-    return updated
+    return { ...t, messages: [...t.messages, msg] }
   })
+  persist()
 }
 
 export function setTyping(id: string, v: boolean): void {
   threads.value = threads.value.map(t => t.id === id ? { ...t, isTyping: v } : t)
+  persist()
 }
 
 export function setIncluded(id: string, v: boolean): void {
   threads.value = threads.value.map(t => {
     if (t.id !== id) return t
-    const updated = { ...t, included: v }
-    persist(updated)
-    return updated
+    return { ...t, included: v }
   })
+  persist()
 }
 
 export function setActive(id: string | null): void {
@@ -90,4 +98,7 @@ export async function loadThreadsForConv(): Promise<void> {
   threads.value = Object.entries(all)
     .filter(([k]) => k.startsWith(prefix))
     .map(([, v]) => v as Thread)
+  activeId.value = null
+  summaryStatus.value = 'idle'
+  endpointInfo.value = null
 }
