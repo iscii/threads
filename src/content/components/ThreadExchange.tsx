@@ -30,8 +30,15 @@ function ThreadInput({ thread }: { thread: Thread }) {
         class="tp-input"
         placeholder="Reply…"
         value={text}
-        onInput={e => setText((e.target as HTMLInputElement).value)}
-        onKeyDown={e => e.key === 'Enter' && submit()}
+        onInput={e => {
+          e.stopPropagation()
+          setText((e.target as HTMLInputElement).value)
+        }}
+        onKeyDown={e => {
+          e.stopPropagation()
+          if (e.key === 'Enter') submit()
+        }}
+        onKeyUp={e => e.stopPropagation()}
       />
       <button
         class="tp-send"

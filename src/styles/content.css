@@ -31,18 +31,6 @@
   z-index: 10;
 }
 
-.tp::before {
-  content: '';
-  position: absolute;
-  left: -9px;
-  top: 18px;
-  border: 5px solid transparent;
-  border-right: 9px solid var(--border2);
-}
-
-.tp[data-active=true]::before {
-  border-right-color: var(--aborder);
-}
 
 @keyframes tp-mount {
   from { opacity: 0; transform: translateY(-8px); }
