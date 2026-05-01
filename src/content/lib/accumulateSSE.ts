@@ -21,15 +21,15 @@ export async function accumulateSSE(response: Response): Promise<string> {
         if (payload === '[DONE]') return accumulated
 
         try {
-          const parsed = JSON.parse(payload) as {
-            delta?: { type?: string; text?: string }
-          }
-          if (
-            parsed.delta?.type === 'text_delta' &&
-            typeof parsed.delta.text === 'string'
-          ) {
-            accumulated += parsed.delta.text
-          }
+          const parsed = JSON.parse(payload) as Record<string, unknown>
+          // Claude.ai uses `completion`; Anthropic messages API uses `delta.text`
+          const token =
+            (typeof parsed.completion === 'string' ? parsed.completion : null) ??
+            (typeof (parsed.delta as Record<string, unknown>)?.text === 'string'
+              ? (parsed.delta as Record<string, unknown>).text as string
+              : null) ??
+            ''
+          if (token) accumulated += token
         } catch {
           // malformed SSE line — skip
         }

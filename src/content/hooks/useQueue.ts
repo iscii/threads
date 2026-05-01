@@ -9,12 +9,21 @@ export function initQueue(networkAdapter: NetworkAdapter): void {
 }
 
 export async function sendThreadReply(threadId: string, userText: string): Promise<void> {
-  const na = _networkAdapter
-  const info = endpointInfo.value
   const t = threads.value.find(t => t.id === threadId)
-  if (!na || !info || !t) return
+  if (!t) return
 
   addMessage(threadId, { role: 'user', content: userText })
+
+  const na = _networkAdapter
+  const info = endpointInfo.value
+  if (!na || !info) {
+    addMessage(threadId, {
+      role: 'assistant',
+      content: '(Send a message in the main chat first to initialize the connection.)',
+    })
+    return
+  }
+
   setTyping(threadId, true)
 
   const systemPrompt =
@@ -22,7 +31,7 @@ export async function sendThreadReply(threadId: string, userText: string): Promi
     `Reply in 1–3 sentences. Do not repeat or quote the passage. ` +
     `Passage: "${t.blockText}"`
 
-  const fresh = threads.value.find(t => t.id === threadId)
+  const fresh = threads.value.find(th => th.id === threadId)
   const history = (fresh?.messages ?? [])
     .map(m => `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`)
     .join('\n')
@@ -33,11 +42,12 @@ export async function sendThreadReply(threadId: string, userText: string): Promi
   try {
     const res = await fetch(info.url, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     })
     const reply = await accumulateSSE(res)
-    addMessage(threadId, { role: 'assistant', content: reply })
+    addMessage(threadId, { role: 'assistant', content: reply || '(empty response)' })
   } catch {
     addMessage(threadId, {
       role: 'assistant',
