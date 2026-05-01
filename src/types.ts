@@ -33,3 +33,9 @@ export interface DOMAdapter {
   /** Returns the page header element. */
   findHeader(): Element | null
 }
+
+export interface Platform {
+  domAdapter: DOMAdapter
+  networkAdapter: NetworkAdapter
+  theme: string
+}
