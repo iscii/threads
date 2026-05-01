@@ -57,7 +57,7 @@ export function ThreadExchange({ thread }: { thread: Thread }) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useSignalEffect(() => {
-    threads.value
+    threads.value.find(t => t.id === thread.id)?.messages.length
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   })
 

@@ -32,7 +32,7 @@ function ChainIcon({ spinning }: { spinning: boolean }) {
 }
 
 export function Badge() {
-  const count = useComputed(() => threads.value.length)
+  const count = useComputed(() => threads.value.filter(t => t.isOpen).length)
   const includedCount = useComputed(
     () => threads.value.filter(t => t.included && t.messages.length > 0).length,
   )

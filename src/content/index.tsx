@@ -28,7 +28,13 @@ if (platform) {
 
   const coordinator = createCoordinator(platform.domAdapter)
 
+  let currentRoot: ShadowRoot | null = null
+
   function mountPreact(root: ShadowRoot): void {
+    if (currentRoot && currentRoot !== root) {
+      render(null, currentRoot)
+    }
+    currentRoot = root
     const style = document.createElement('style')
     style.textContent = platform.theme + '\n' + contentCSS
     root.appendChild(style)
