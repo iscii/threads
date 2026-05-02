@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'preact/hooks'
 import { useComputed, useSignalEffect } from '@preact/signals'
-import { threads, setActive } from './lib/threads'
+import { threads, activeId, setActive } from './lib/threads'
 import { resolveCollisions, type PanelGeometry } from './lib/positions'
 import { ThreadPanel } from './components/Thread'
 import { useObserver } from './hooks/useObserver'
@@ -30,6 +30,7 @@ export function App({ coordinator, domAdapter }: AppProps) {
     }))
 
     setPositions(resolveCollisions(geoms, {
+      activeId: activeId.value ?? undefined,
       maxBottom: coordinator.getZoneHeight(),
       minTop: atTop ? 0 : undefined,
     }))
