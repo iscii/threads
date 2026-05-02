@@ -78,6 +78,31 @@ describe('resolveCollisions', () => {
     expect(result['b']).toBe(110)   // pushed below a even though it overflows maxBottom
   })
 
+  it('group of 4+ naturally colliding panels overlaps at natural positions', () => {
+    const panels: PanelGeometry[] = [
+      { id: 'a', top: 100, height: 200 },
+      { id: 'b', top: 150, height: 200 },
+      { id: 'c', top: 200, height: 200 },
+      { id: 'd', top: 250, height: 200 },
+    ]
+    const result = resolveCollisions(panels)
+    expect(result['a']).toBe(100)
+    expect(result['b']).toBe(150)
+    expect(result['c']).toBe(200)
+    expect(result['d']).toBe(250)
+  })
+
+  it('group of exactly 3 still uses push-down', () => {
+    const panels: PanelGeometry[] = [
+      { id: 'a', top: 100, height: 200 },
+      { id: 'b', top: 150, height: 200 },
+      { id: 'c', top: 200, height: 200 },
+    ]
+    const result = resolveCollisions(panels)
+    expect(result['b']).toBeGreaterThanOrEqual(result['a'] + 200 + 10)
+    expect(result['c']).toBeGreaterThanOrEqual(result['b'] + 200 + 10)
+  })
+
   it('regression: two spread panels are unaffected by each other', () => {
     const panels: PanelGeometry[] = [
       { id: 'a', top: 100, height: 200 },

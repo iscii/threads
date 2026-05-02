@@ -9,15 +9,35 @@ export function resolveCollisions(
   const sorted = [...panels].sort((a, b) => a.top - b.top)
   const tops: number[] = new Array(sorted.length)
 
-  // Pass 1: greedy push-down — each panel placed below the previous if they overlap.
-  tops[0] = sorted[0].top
-  for (let i = 1; i < sorted.length; i++) {
-    tops[i] = Math.max(sorted[i].top, tops[i - 1] + sorted[i - 1].height + 10)
+  // Pass 1: group-aware layout.
+  // Walk consecutive panels that naturally collide into groups. Groups of ≤3
+  // get greedy push-down so they stay separated. Groups of >3 use natural
+  // positions and overlap — pushing 4+ panels apart displaces them too far
+  // from their source blocks.
+  let i = 0
+  while (i < sorted.length) {
+    let j = i
+    while (
+      j < sorted.length - 1 &&
+      sorted[j].top + sorted[j].height + 10 > sorted[j + 1].top
+    ) j++
+
+    if (j - i < 3) {
+      // Small group (≤3 panels): push-down within the group.
+      tops[i] = sorted[i].top
+      for (let k = i + 1; k <= j; k++) {
+        tops[k] = Math.max(sorted[k].top, tops[k - 1] + sorted[k - 1].height + 10)
+      }
+    } else {
+      // Large group (>3 panels): natural positions, let them overlap.
+      for (let k = i; k <= j; k++) tops[k] = sorted[k].top
+    }
+
+    i = j + 1
   }
 
-  // Bottom boundary: walk backward clamping each panel to maxBottom.
+  // Bottom boundary: walk backward clamping panels to maxBottom.
   // Panels that exceed the boundary overlap with the one above rather than clipping off-screen.
-  // Ordering is preserved (no inversions) but gaps can go negative.
   if (options?.maxBottom !== undefined) {
     const maxBottom = options.maxBottom
     for (let i = sorted.length - 1; i >= 0; i--) {
