@@ -1,6 +1,7 @@
 import type { NetworkAdapter } from '@/types'
 import { threads, endpointInfo, addMessage, setTyping } from '../lib/threads'
 import { accumulateSSE } from '../lib/accumulateSSE'
+import { sameOriginURL } from '../lib/endpoint'
 
 let _networkAdapter: NetworkAdapter | null = null
 
@@ -24,6 +25,15 @@ export async function sendThreadReply(threadId: string, userText: string): Promi
     return
   }
 
+  const endpointURL = sameOriginURL(info.url)
+  if (!endpointURL) {
+    addMessage(threadId, {
+      role: 'assistant',
+      content: '(Captured Claude endpoint was not same-origin; refusing to send credentials.)',
+    })
+    return
+  }
+
   setTyping(threadId, true)
 
   const systemPrompt =
@@ -40,7 +50,7 @@ export async function sendThreadReply(threadId: string, userText: string): Promi
   const body = na.buildCompletion(info.body, prompt)
 
   try {
-    const res = await fetch(info.url, {
+    const res = await fetch(endpointURL, {
       method: 'POST',
       credentials: 'include',
       headers: { 'content-type': 'application/json' },

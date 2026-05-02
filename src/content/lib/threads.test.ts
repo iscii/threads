@@ -48,6 +48,7 @@ describe('closeThread', () => {
     const id = threads.value[0].id
     closeThread(id)
     expect(threads.value).toHaveLength(0)
+    expect(activeId.value).toBeNull()
   })
 
   it('keeps thread with messages and sets isOpen false', () => {
@@ -57,6 +58,7 @@ describe('closeThread', () => {
     closeThread(id)
     expect(threads.value).toHaveLength(1)
     expect(threads.value[0].isOpen).toBe(false)
+    expect(activeId.value).toBeNull()
   })
 })
 

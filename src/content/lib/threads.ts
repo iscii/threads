@@ -60,11 +60,11 @@ export function closeThread(id: string): void {
   if (!t) return
   if (t.messages.length === 0) {
     threads.value = threads.value.filter(t => t.id !== id)
-    persist()
   } else {
     threads.value = threads.value.map(t => t.id === id ? { ...t, isOpen: false } : t)
-    persist()
   }
+  if (activeId.value === id) activeId.value = null
+  persist()
 }
 
 export function addMessage(id: string, msg: ThreadMsg): void {

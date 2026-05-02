@@ -3,6 +3,7 @@ import type { Thread } from '../lib/threads'
 import { summaryStatus, endpointInfo } from '../lib/threads'
 import { dirtyThreads, advanceMarks, enqueue, drainQueue } from '../lib/summaryStore'
 import { accumulateSSE } from '../lib/accumulateSSE'
+import { sameOriginURL } from '../lib/endpoint'
 import { MSG } from '@/messaging'
 
 let _networkAdapter: NetworkAdapter | null = null
@@ -34,6 +35,9 @@ export async function triggerSummarization(): Promise<void> {
   const info = endpointInfo.value
   if (!na || !info) return
 
+  const endpointURL = sameOriginURL(info.url)
+  if (!endpointURL) return
+
   const dirty = dirtyThreads()
   if (dirty.length === 0) return
 
@@ -43,8 +47,9 @@ export async function triggerSummarization(): Promise<void> {
   summaryStatus.value = 'summarizing'
 
   try {
-    const res = await fetch(info.url, {
+    const res = await fetch(endpointURL, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     })
