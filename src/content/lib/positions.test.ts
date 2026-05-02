@@ -40,9 +40,39 @@ describe('resolveCollisions', () => {
     expect(result['c']).toBeGreaterThanOrEqual(result['b'] + 50 + 10)
   })
 
-  it('single panel with negative top preserves the negative value', () => {
+  it('single panel with negative top is clamped to 0', () => {
     const panels: PanelGeometry[] = [{ id: 'a', top: -100, height: 50 }]
-    expect(resolveCollisions(panels)).toEqual({ a: -100 })
+    expect(resolveCollisions(panels)).toEqual({ a: 0 })
+  })
+
+  it('panel with negative top is clamped to 0', () => {
+    const panels: PanelGeometry[] = [{ id: 'a', top: -60, height: 100 }]
+    expect(resolveCollisions(panels)['a']).toBe(0)
+  })
+
+  it('panel overflowing bottom is pushed up to fit within maxBottom', () => {
+    const panels: PanelGeometry[] = [{ id: 'a', top: 700, height: 100 }]
+    expect(resolveCollisions(panels, { maxBottom: 750 })['a']).toBe(650)
+  })
+
+  it('two panels overflowing bottom are stacked upward from maxBottom', () => {
+    const panels: PanelGeometry[] = [
+      { id: 'a', top: 700, height: 100 },
+      { id: 'b', top: 720, height: 100 },
+    ]
+    const result = resolveCollisions(panels, { maxBottom: 800 })
+    expect(result['b']).toBe(700)          // 800 - height(100)
+    expect(result['a']).toBe(590)          // 700 - height(100) - gap(10)
+  })
+
+  it('top boundary wins when zone is too small for all panels', () => {
+    const panels: PanelGeometry[] = [
+      { id: 'a', top: -10, height: 100 },
+      { id: 'b', top: 0, height: 100 },
+    ]
+    const result = resolveCollisions(panels, { maxBottom: 150 })
+    expect(result['a']).toBe(0)
+    expect(result['b']).toBe(110)  // pushed below a even though it overflows maxBottom
   })
 
   it('non-displaced panel is not pulled up by displaced panels below it', () => {

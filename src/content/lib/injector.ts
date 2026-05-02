@@ -101,6 +101,10 @@ export function createInjector(
       return entry.blockEl.getBoundingClientRect().top - hostTop
     },
 
+    getZoneHeight() {
+      return host.getBoundingClientRect().height
+    },
+
     destroy() {
       resizeObserver?.disconnect()
       resizeObserver = null

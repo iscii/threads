@@ -1,6 +1,9 @@
 export type PanelGeometry = { id: string; top: number; height: number }
 
-export function resolveCollisions(panels: PanelGeometry[]): Record<string, number> {
+export function resolveCollisions(
+  panels: PanelGeometry[],
+  options?: { maxBottom?: number },
+): Record<string, number> {
   if (panels.length === 0) return {}
 
   const sorted = [...panels].sort((a, b) => a.top - b.top)
@@ -33,6 +36,25 @@ export function resolveCollisions(panels: PanelGeometry[]): Record<string, numbe
       newTop += sorted[k].height + 10
     }
     i = j + 1
+  }
+
+  // Pass 3: zone boundary clamping.
+  // Bottom: walk backward pushing panels up to keep them inside maxBottom.
+  if (options?.maxBottom !== undefined) {
+    const maxBottom = options.maxBottom
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      if (tops[i] + sorted[i].height > maxBottom) tops[i] = maxBottom - sorted[i].height
+      if (i > 0 && tops[i] < tops[i - 1] + sorted[i - 1].height + 10) {
+        tops[i - 1] = tops[i] - sorted[i - 1].height - 10
+      }
+    }
+  }
+  // Top: walk forward clamping at 0. Top wins if zone is too small to fit all panels.
+  for (let i = 0; i < sorted.length; i++) {
+    if (tops[i] < 0) tops[i] = 0
+    if (i > 0 && tops[i] < tops[i - 1] + sorted[i - 1].height + 10) {
+      tops[i] = tops[i - 1] + sorted[i - 1].height + 10
+    }
   }
 
   return Object.fromEntries(sorted.map((p, idx) => [p.id, tops[idx]]))

@@ -25,7 +25,7 @@ export function App({ coordinator, domAdapter }: AppProps) {
       top: coordinator.getBlockTop(t.blockId),
       height: panelRefs.current.get(t.id)?.offsetHeight ?? 200,
     }))
-    setPositions(resolveCollisions(geoms))
+    setPositions(resolveCollisions(geoms, { maxBottom: coordinator.getZoneHeight() }))
   }
   const compute = useCallback(() => computeRef.current(), [])
 
