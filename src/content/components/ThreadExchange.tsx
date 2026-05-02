@@ -1,7 +1,5 @@
 import type { RefObject } from 'preact'
 import { useRef, useState } from 'preact/hooks'
-import { useSignalEffect } from '@preact/signals'
-import { threads } from '../lib/threads'
 import { sendThreadReply } from '../hooks/useQueue'
 import type { Thread } from '../lib/threads'
 
@@ -64,11 +62,6 @@ function ThreadInput({ thread, inputRef }: { thread: Thread; inputRef?: RefObjec
 
 export function ThreadExchange({ thread, inputRef }: { thread: Thread; inputRef?: RefObject<HTMLInputElement> }) {
   const bottomRef = useRef<HTMLDivElement>(null)
-
-  useSignalEffect(() => {
-    threads.value.find(t => t.id === thread.id)?.messages.length
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  })
 
   return (
     <div class="tp-body">
