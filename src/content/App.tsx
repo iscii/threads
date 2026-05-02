@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'preact/hooks'
 import { useComputed } from '@preact/signals'
-import { threads, setActive } from './lib/threads'
+import { threads, activeId, setActive } from './lib/threads'
 import { ThreadPanel } from './components/Thread'
 import { useObserver } from './hooks/useObserver'
 import { useInputDirty } from './hooks/useInputDirty'
@@ -35,21 +35,21 @@ export function App({ coordinator, domAdapter }: AppProps) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const scrollToBlock = useCallback((blockId: string) => {
-    const block = document.querySelector(`[data-thr-id="${blockId}"]`)
-    block?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [])
-
   return (
     <>
-      {openThreads.value.map(t => (
-        <ThreadPanel
-          key={t.id}
-          thread={t}
-          top={coordinator.getBlockTop(t.blockId)}
-          onScrollToBlock={() => scrollToBlock(t.blockId)}
-        />
-      ))}
+      {openThreads.value.map(t => {
+        const top = coordinator.getBlockTop(t.blockId)
+        const isActive = activeId.value === t.id
+        return [
+          <button
+            key={`tab-${t.id}`}
+            class={`tp-tab${isActive ? ' active' : ''}`}
+            style={{ top: `${top}px` }}
+            onMouseDown={e => { e.stopPropagation(); setActive(t.id) }}
+          />,
+          <ThreadPanel key={t.id} thread={t} top={top} />,
+        ]
+      })}
     </>
   )
 }
