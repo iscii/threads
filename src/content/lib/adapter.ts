@@ -1,7 +1,7 @@
 import { effect } from '@preact/signals'
 import { createObserver } from './observer'
 import { createInjector } from './injector'
-import { threads, activeId, endpointInfo, openThread, setActive, loadThreadsForConv } from './threads'
+import { threads, activeId, endpointInfo, openThread, closeThread, setActive, loadThreadsForConv } from './threads'
 import { loadSummaryForConv } from './summaryStore'
 import type { DOMAdapter } from '@/types'
 import type { BlockDescriptor } from './types'
@@ -14,19 +14,25 @@ export function createCoordinator(domAdapter: DOMAdapter) {
   let started = false
 
   let injector = createInjector(
-    { onBlockTriggerClicked, onDotClicked },
+    { onBlockTriggerClicked },
     () => domAdapter.findScrollContainer(),
     () => domAdapter.findHeader(),
+    () => domAdapter.findChatContainer(),
   )
 
   const observer = createObserver(domAdapter, { onBlocksFound, onConversationChanged })
 
   // Keep injector DOM state in sync with thread signals
+  let prevBlockIds = new Set<string>()
   const disposeEffect = effect(() => {
+    const currentBlockIds = new Set(threads.value.map(t => t.blockId))
+    for (const id of prevBlockIds) {
+      if (!currentBlockIds.has(id)) injector.setBlockState(id, 'idle')
+    }
+    prevBlockIds = currentBlockIds
     for (const t of threads.value) {
       const state = t.isOpen ? 'active' : t.messages.length > 0 ? 'has-thread' : 'idle'
       injector.setBlockState(t.blockId, state)
-      injector.setDotVisible(t.blockId, !t.isOpen && t.messages.length > 0)
     }
   })
 
@@ -36,20 +42,16 @@ export function createCoordinator(domAdapter: DOMAdapter) {
   }
 
   function onBlockTriggerClicked(blockId: string): void {
+    const t = threads.value.find(th => th.blockId === blockId)
+    if (t?.isOpen) {
+      closeThread(t.id)
+      setActive(null)
+      return
+    }
     const block = blockRegistry.get(blockId)
-    openThread(blockId, block?.text ?? '')
-    const t = threads.value.find(th => th.blockId === blockId)
-    if (t) setActive(t.id)
-  }
-
-  function onDotClicked(blockId: string): void {
-    const text =
-      blockRegistry.get(blockId)?.text ??
-      threads.value.find(t => t.blockId === blockId)?.blockText ??
-      ''
-    openThread(blockId, text)
-    const t = threads.value.find(th => th.blockId === blockId)
-    if (t) setActive(t.id)
+    openThread(blockId, block?.text ?? t?.blockText ?? '')
+    const updated = threads.value.find(th => th.blockId === blockId)
+    if (updated) setActive(updated.id)
   }
 
   function onConversationChanged(): void {
@@ -60,8 +62,10 @@ export function createCoordinator(domAdapter: DOMAdapter) {
     endpointInfo.value = null
 
     injector = createInjector(
-      { onBlockTriggerClicked, onDotClicked },
+      { onBlockTriggerClicked },
       () => domAdapter.findScrollContainer(),
+      () => domAdapter.findHeader(),
+      () => domAdapter.findChatContainer(),
     )
 
     const shadow = injector.getShadowRoot()

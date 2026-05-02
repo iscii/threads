@@ -32,6 +32,12 @@ export interface DOMAdapter {
 
   /** Returns the page header element. */
   findHeader(): Element | null
+
+  /** Returns the response content column (used to anchor the thread zone to its right edge). */
+  findChatContainer(): Element | null
+
+  /** Returns the header action bar where the badge should be prepended (before Share). */
+  findHeaderActions(): Element | null
 }
 
 export interface Platform {

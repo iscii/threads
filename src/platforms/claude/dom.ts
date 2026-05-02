@@ -24,4 +24,12 @@ export const claudeDOMAdapter: DOMAdapter = {
   findHeader() {
     return document.querySelector('header.sticky')
   },
+
+  findChatContainer() {
+    return document.querySelector('[data-autoscroll-container] div.max-w-3xl.px-4')
+  },
+
+  findHeaderActions() {
+    return document.querySelector('[data-testid="wiggle-controls-actions"]')
+  },
 }

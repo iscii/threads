@@ -44,11 +44,12 @@ if (platform) {
   const shadow = coordinator.getShadowRoot()
   coordinator.setOnReset(mountPreact)
   mountPreact(shadow)
+  coordinator.start()
 
-  const header = platform.domAdapter.findHeader()
-  if (header) {
+  const actionsContainer = platform.domAdapter.findHeaderActions()
+  if (actionsContainer) {
     const badgeRoot = document.createElement('div')
-    header.appendChild(badgeRoot)
+    actionsContainer.insertBefore(badgeRoot, actionsContainer.firstChild)
     render(<Badge />, badgeRoot)
   }
 }
