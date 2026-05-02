@@ -15,20 +15,14 @@ function ChatBubbleIcon() {
   )
 }
 
-function ChainIcon({ spinning }: { spinning: boolean }) {
+function BookmarkIcon() {
   return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 14 14"
-      fill="none"
-      style={spinning ? { animation: 'spin 1s linear infinite' } : undefined}
-    >
+    <svg width="13" height="13" viewBox="0 0 11 11" fill="none">
       <path
-        d="M5 7a2 2 0 0 0 2 2h2a2 2 0 1 0 0-4H8m-1 0H5a2 2 0 1 0 0 4h1"
+        d="M2 1h7v9.5l-3.5-2.5L2 10.5z"
         stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
       />
     </svg>
   )
@@ -60,7 +54,7 @@ export function Badge() {
               : `${includedCount.value} thread summaries included`
           }
         >
-          <ChainIcon spinning={summaryStatus.value === 'summarizing'} />
+          <BookmarkIcon />
         </button>
       )}
     </div>

@@ -219,12 +219,15 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
+  padding: 0 8px;
+  height: 26px;
+  box-sizing: border-box;
   border-radius: 6px;
   border: 1px solid rgba(201,138,82,0.22);
   background: rgba(201,138,82,0.08);
   color: #c98a52;
   font-size: 12px;
+  line-height: 1;
   cursor: pointer;
   transition: background 0.12s ease;
 }
