@@ -1,4 +1,5 @@
-import { useComputed } from '@preact/signals'
+import { useComputed, useSignalEffect } from '@preact/signals'
+import { useRef } from 'preact/hooks'
 import { activeId, setActive, setIncluded, closeThread } from '../lib/threads'
 import { ThreadExchange } from './ThreadExchange'
 import type { Thread } from '../lib/threads'
@@ -26,6 +27,13 @@ interface ThreadPanelProps {
 
 export function ThreadPanel({ thread, top }: ThreadPanelProps) {
   const isActive = useComputed(() => activeId.value === thread.id)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useSignalEffect(() => {
+    if (activeId.value === thread.id) {
+      requestAnimationFrame(() => inputRef.current?.focus())
+    }
+  })
 
   return (
     <div
@@ -58,7 +66,7 @@ export function ThreadPanel({ thread, top }: ThreadPanelProps) {
           </button>
         </div>
       </div>
-      <ThreadExchange thread={thread} />
+      <ThreadExchange thread={thread} inputRef={inputRef} />
     </div>
   )
 }

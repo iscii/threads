@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'preact/hooks'
+import { useState, useEffect, useCallback, useRef } from 'preact/hooks'
 import { useComputed } from '@preact/signals'
 import { threads, activeId, setActive } from './lib/threads'
 import { ThreadPanel } from './components/Thread'
@@ -14,31 +14,35 @@ interface AppProps {
 
 export function App({ coordinator, domAdapter }: AppProps) {
   const openThreads = useComputed(() => threads.value.filter(t => t.isOpen))
+  const posRef = useRef<Map<string, number>>(new Map())
   const [, setTick] = useState(0)
-  const rerender = useCallback(() => setTick(n => n + 1), [])
+
+  const refreshPositions = useCallback(() => {
+    for (const t of openThreads.peek()) {
+      posRef.current.set(t.id, coordinator.getBlockTop(t.blockId))
+    }
+    setTick(n => n + 1)
+  }, [coordinator, openThreads])
 
   useEffect(() => {
-    window.addEventListener('scroll', rerender, true)
-    window.addEventListener('resize', rerender)
+    window.addEventListener('scroll', refreshPositions, true)
+    window.addEventListener('resize', refreshPositions)
     return () => {
-      window.removeEventListener('scroll', rerender, true)
-      window.removeEventListener('resize', rerender)
+      window.removeEventListener('scroll', refreshPositions, true)
+      window.removeEventListener('resize', refreshPositions)
     }
-  }, [rerender])
+  }, [refreshPositions])
 
   useObserver(coordinator)
   useInputDirty(domAdapter)
 
-  useEffect(() => {
-    const handler = () => setActive(null)
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
   return (
     <>
       {openThreads.value.map(t => {
-        const top = coordinator.getBlockTop(t.blockId)
+        if (!posRef.current.has(t.id)) {
+          posRef.current.set(t.id, coordinator.getBlockTop(t.blockId))
+        }
+        const top = posRef.current.get(t.id)!
         const isActive = activeId.value === t.id
         return [
           <button

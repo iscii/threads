@@ -1,3 +1,4 @@
+import type { RefObject } from 'preact'
 import { useRef, useState } from 'preact/hooks'
 import { useSignalEffect } from '@preact/signals'
 import { threads } from '../lib/threads'
@@ -14,7 +15,7 @@ function TypingIndicator() {
   )
 }
 
-function ThreadInput({ thread }: { thread: Thread }) {
+function ThreadInput({ thread, inputRef }: { thread: Thread; inputRef?: RefObject<HTMLInputElement> }) {
   const [text, setText] = useState('')
 
   const submit = () => {
@@ -27,6 +28,7 @@ function ThreadInput({ thread }: { thread: Thread }) {
   return (
     <div class="tp-input-row">
       <input
+        ref={inputRef}
         class="tp-input"
         placeholder="Reply…"
         value={text}
@@ -60,7 +62,7 @@ function ThreadInput({ thread }: { thread: Thread }) {
   )
 }
 
-export function ThreadExchange({ thread }: { thread: Thread }) {
+export function ThreadExchange({ thread, inputRef }: { thread: Thread; inputRef?: RefObject<HTMLInputElement> }) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useSignalEffect(() => {
@@ -79,7 +81,7 @@ export function ThreadExchange({ thread }: { thread: Thread }) {
         {thread.isTyping && <TypingIndicator />}
         <div ref={bottomRef} />
       </div>
-      <ThreadInput thread={thread} />
+      <ThreadInput thread={thread} inputRef={inputRef} />
     </div>
   )
 }
