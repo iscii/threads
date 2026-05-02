@@ -1,3 +1,4 @@
+import { Fragment } from 'preact'
 import { useState, useEffect, useCallback, useRef } from 'preact/hooks'
 import { useComputed } from '@preact/signals'
 import { threads, activeId, setActive } from './lib/threads'
@@ -44,15 +45,16 @@ export function App({ coordinator, domAdapter }: AppProps) {
         }
         const top = posRef.current.get(t.id)!
         const isActive = activeId.value === t.id
-        return [
-          <button
-            key={`tab-${t.id}`}
-            class={`tp-tab${isActive ? ' active' : ''}`}
-            style={{ top: `${top}px` }}
-            onMouseDown={e => { e.stopPropagation(); setActive(t.id) }}
-          />,
-          <ThreadPanel key={t.id} thread={t} top={top} />,
-        ]
+        return (
+          <Fragment key={t.id}>
+            <button
+              class={`tp-tab${isActive ? ' active' : ''}`}
+              style={{ top: `${top}px` }}
+              onMouseDown={e => { e.stopPropagation(); setActive(t.id) }}
+            />
+            <ThreadPanel thread={t} top={top} />
+          </Fragment>
+        )
       })}
     </>
   )
