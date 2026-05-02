@@ -20,12 +20,23 @@ export function App({ coordinator, domAdapter }: AppProps) {
 
   const computeRef = useRef<() => void>(() => {})
   computeRef.current = () => {
+    const scrollEl = domAdapter.findScrollContainer()
+    const atTop = !scrollEl || scrollEl.scrollTop < 2
+    const atBottom = scrollEl
+      ? scrollEl.scrollTop >= scrollEl.scrollHeight - scrollEl.clientHeight - 2
+      : false
+
     const geoms: PanelGeometry[] = openThreads.value.map(t => ({
       id: t.id,
       top: coordinator.getBlockTop(t.blockId),
       height: panelRefs.current.get(t.id)?.offsetHeight ?? 200,
     }))
-    setPositions(resolveCollisions(geoms, { maxBottom: coordinator.getZoneHeight() }))
+
+    const opts: { minTop?: number; maxBottom?: number } = {}
+    if (atTop) opts.minTop = 0
+    if (atBottom) opts.maxBottom = coordinator.getZoneHeight()
+
+    setPositions(resolveCollisions(geoms, opts))
   }
   const compute = useCallback(() => computeRef.current(), [])
 

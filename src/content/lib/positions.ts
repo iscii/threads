@@ -2,7 +2,7 @@ export type PanelGeometry = { id: string; top: number; height: number }
 
 export function resolveCollisions(
   panels: PanelGeometry[],
-  options?: { maxBottom?: number },
+  options?: { minTop?: number; maxBottom?: number },
 ): Record<string, number> {
   if (panels.length === 0) return {}
 
@@ -38,7 +38,7 @@ export function resolveCollisions(
     i = j + 1
   }
 
-  // Pass 3: zone boundary clamping.
+  // Pass 3: optional zone boundary clamping — only applied at scroll extremes.
   // Bottom: walk backward pushing panels up to keep them inside maxBottom.
   if (options?.maxBottom !== undefined) {
     const maxBottom = options.maxBottom
@@ -49,11 +49,14 @@ export function resolveCollisions(
       }
     }
   }
-  // Top: walk forward clamping at 0. Top wins if zone is too small to fit all panels.
-  for (let i = 0; i < sorted.length; i++) {
-    if (tops[i] < 0) tops[i] = 0
-    if (i > 0 && tops[i] < tops[i - 1] + sorted[i - 1].height + 10) {
-      tops[i] = tops[i - 1] + sorted[i - 1].height + 10
+  // Top: walk forward pushing panels down to minTop. Top wins if zone is too small.
+  if (options?.minTop !== undefined) {
+    const minTop = options.minTop
+    for (let i = 0; i < sorted.length; i++) {
+      if (tops[i] < minTop) tops[i] = minTop
+      if (i > 0 && tops[i] < tops[i - 1] + sorted[i - 1].height + 10) {
+        tops[i] = tops[i - 1] + sorted[i - 1].height + 10
+      }
     }
   }
 

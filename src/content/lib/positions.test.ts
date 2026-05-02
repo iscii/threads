@@ -40,14 +40,14 @@ describe('resolveCollisions', () => {
     expect(result['c']).toBeGreaterThanOrEqual(result['b'] + 50 + 10)
   })
 
-  it('single panel with negative top is clamped to 0', () => {
+  it('single panel with negative top preserves the negative value without options', () => {
     const panels: PanelGeometry[] = [{ id: 'a', top: -100, height: 50 }]
-    expect(resolveCollisions(panels)).toEqual({ a: 0 })
+    expect(resolveCollisions(panels)).toEqual({ a: -100 })
   })
 
-  it('panel with negative top is clamped to 0', () => {
+  it('panel with negative top is clamped to minTop when minTop is provided', () => {
     const panels: PanelGeometry[] = [{ id: 'a', top: -60, height: 100 }]
-    expect(resolveCollisions(panels)['a']).toBe(0)
+    expect(resolveCollisions(panels, { minTop: 0 })['a']).toBe(0)
   })
 
   it('panel overflowing bottom is pushed up to fit within maxBottom', () => {
@@ -70,7 +70,7 @@ describe('resolveCollisions', () => {
       { id: 'a', top: -10, height: 100 },
       { id: 'b', top: 0, height: 100 },
     ]
-    const result = resolveCollisions(panels, { maxBottom: 150 })
+    const result = resolveCollisions(panels, { minTop: 0, maxBottom: 150 })
     expect(result['a']).toBe(0)
     expect(result['b']).toBe(110)  // pushed below a even though it overflows maxBottom
   })
