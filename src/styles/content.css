@@ -18,11 +18,41 @@
   border-radius: var(--radius-panel);
   box-shadow: var(--shadow-idle);
   pointer-events: all;
-  transition: top 0.28s cubic-bezier(0.4, 0, 0.2, 1);
   animation: tp-mount 0.17s ease forwards;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   max-height: 480px;
+}
+
+/* ── Panel handle (left strip, scroll-to-block) ───────────────────── */
+.tp-handle {
+  width: 16px;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--border);
+  border-radius: calc(var(--radius-panel) - 1px) 0 0 calc(var(--radius-panel) - 1px);
+  color: var(--text3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: color 0.1s ease, background 0.1s ease;
+}
+
+.tp-handle:hover {
+  color: var(--accent);
+  background: var(--adim);
+}
+
+/* ── Panel inner (header + body) ──────────────────────────────────── */
+.tp-inner {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .tp[data-active=true] {

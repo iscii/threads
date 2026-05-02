@@ -90,7 +90,6 @@ export function createCoordinator(domAdapter: DOMAdapter) {
     start,
     stop,
     getBlockTop: (blockId: string) => injector.getBlockTop(blockId),
-    getZoneHeight: () => injector.getZoneHeight(),
     getShadowRoot: () => injector.getShadowRoot(),
     setOnReset: (cb: (shadow: ShadowRoot) => void) => { onReset = cb },
   }

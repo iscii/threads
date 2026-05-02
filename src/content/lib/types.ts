@@ -25,8 +25,6 @@ export interface DOMLayerAPI {
   setBlockState(blockId: string, state: 'idle' | 'has-thread' | 'active'): void
   /** Returns the viewport-relative top of the block wrapper. */
   getBlockTop(blockId: string): number
-  /** Returns the pixel height of the thread zone (viewport height minus header). */
-  getZoneHeight(): number
   /** Disconnects the ResizeObserver and removes the host from the DOM. Call on conversation change. */
   destroy(): void
 }

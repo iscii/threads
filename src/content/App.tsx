@@ -1,7 +1,6 @@
-import { useRef, useState, useEffect, useCallback } from 'preact/hooks'
-import { useComputed, useSignalEffect } from '@preact/signals'
+import { useState, useEffect, useCallback } from 'preact/hooks'
+import { useComputed } from '@preact/signals'
 import { threads, setActive } from './lib/threads'
-import { resolveCollisions, type PanelGeometry } from './lib/positions'
 import { ThreadPanel } from './components/Thread'
 import { useObserver } from './hooks/useObserver'
 import { useInputDirty } from './hooks/useInputDirty'
@@ -15,46 +14,17 @@ interface AppProps {
 
 export function App({ coordinator, domAdapter }: AppProps) {
   const openThreads = useComputed(() => threads.value.filter(t => t.isOpen))
-  const panelRefs = useRef<Map<string, HTMLElement>>(new Map())
-  const [positions, setPositions] = useState<Record<string, number>>({})
-
-  const computeRef = useRef<() => void>(() => {})
-  computeRef.current = () => {
-    const scrollEl = domAdapter.findScrollContainer()
-    const atTop = !scrollEl || scrollEl.scrollTop < 2
-
-    const geoms: PanelGeometry[] = openThreads.value.map(t => ({
-      id: t.id,
-      top: coordinator.getBlockTop(t.blockId),
-      height: panelRefs.current.get(t.id)?.offsetHeight ?? 200,
-    }))
-
-    setPositions(resolveCollisions(geoms, {
-      maxBottom: coordinator.getZoneHeight(),
-      minTop: atTop ? 0 : undefined,
-    }))
-  }
-  const compute = useCallback(() => computeRef.current(), [])
-
-  const registerRef = useCallback((id: string, el: HTMLElement) => {
-    panelRefs.current.set(id, el)
-    compute()
-  }, [compute])
-
-  useSignalEffect(() => {
-    threads.value
-    compute()
-  })
+  const [, setTick] = useState(0)
+  const rerender = useCallback(() => setTick(n => n + 1), [])
 
   useEffect(() => {
-    // capture:true catches scroll events on any descendant (scroll container may not exist at mount)
-    window.addEventListener('scroll', compute, true)
-    window.addEventListener('resize', compute)
+    window.addEventListener('scroll', rerender, true)
+    window.addEventListener('resize', rerender)
     return () => {
-      window.removeEventListener('scroll', compute, true)
-      window.removeEventListener('resize', compute)
+      window.removeEventListener('scroll', rerender, true)
+      window.removeEventListener('resize', rerender)
     }
-  }, [compute])
+  }, [rerender])
 
   useObserver(coordinator)
   useInputDirty(domAdapter)
@@ -65,14 +35,19 @@ export function App({ coordinator, domAdapter }: AppProps) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  const scrollToBlock = useCallback((blockId: string) => {
+    const block = document.querySelector(`[data-thr-id="${blockId}"]`)
+    block?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
   return (
     <>
       {openThreads.value.map(t => (
         <ThreadPanel
           key={t.id}
           thread={t}
-          top={positions[t.id] ?? coordinator.getBlockTop(t.blockId)}
-          registerRef={registerRef}
+          top={coordinator.getBlockTop(t.blockId)}
+          onScrollToBlock={() => scrollToBlock(t.blockId)}
         />
       ))}
     </>
