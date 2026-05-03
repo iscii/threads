@@ -17,18 +17,18 @@ export function App({ coordinator, domAdapter }: AppProps) {
   const openThreads = useComputed(() => threads.value.filter(t => t.isOpen))
   const [, setTick] = useState(0)
 
-  const refreshPositions = useCallback(() => {
+  const forceUpdate = useCallback(() => {
     setTick(n => n + 1)
   }, [])
 
   useEffect(() => {
-    window.addEventListener('scroll', refreshPositions, true)
-    window.addEventListener('resize', refreshPositions)
+    window.addEventListener('scroll', forceUpdate, true)
+    window.addEventListener('resize', forceUpdate)
     return () => {
-      window.removeEventListener('scroll', refreshPositions, true)
-      window.removeEventListener('resize', refreshPositions)
+      window.removeEventListener('scroll', forceUpdate, true)
+      window.removeEventListener('resize', forceUpdate)
     }
-  }, [refreshPositions])
+  }, [forceUpdate])
 
   useObserver(coordinator)
   useInputDirty(domAdapter)

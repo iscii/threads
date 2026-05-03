@@ -1,5 +1,5 @@
 import type { RefObject } from 'preact'
-import { useRef, useState } from 'preact/hooks'
+import { useState } from 'preact/hooks'
 import { sendThreadReply } from '../hooks/useQueue'
 import type { Thread } from '../lib/threads'
 
@@ -61,8 +61,6 @@ function ThreadInput({ thread, inputRef }: { thread: Thread; inputRef?: RefObjec
 }
 
 export function ThreadExchange({ thread, inputRef }: { thread: Thread; inputRef?: RefObject<HTMLInputElement> }) {
-  const bottomRef = useRef<HTMLDivElement>(null)
-
   return (
     <div class="tp-body">
       <div class="tp-msgs">
@@ -72,7 +70,6 @@ export function ThreadExchange({ thread, inputRef }: { thread: Thread; inputRef?
           </div>
         ))}
         {thread.isTyping && <TypingIndicator />}
-        <div ref={bottomRef} />
       </div>
       <ThreadInput thread={thread} inputRef={inputRef} />
     </div>

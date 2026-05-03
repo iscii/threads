@@ -1,4 +1,4 @@
-import { signal } from '@preact/signals'
+import { signal, batch } from '@preact/signals'
 import { convId, threadKey } from './keys'
 
 export type ThreadMsg = { role: 'user' | 'assistant'; content: string }
@@ -58,12 +58,14 @@ export function openThread(blockId: string, blockText: string): void {
 export function closeThread(id: string): void {
   const t = threads.value.find(t => t.id === id)
   if (!t) return
-  if (t.messages.length === 0) {
-    threads.value = threads.value.filter(t => t.id !== id)
-  } else {
-    threads.value = threads.value.map(t => t.id === id ? { ...t, isOpen: false } : t)
-  }
-  if (activeId.value === id) activeId.value = null
+  batch(() => {
+    if (t.messages.length === 0) {
+      threads.value = threads.value.filter(t => t.id !== id)
+    } else {
+      threads.value = threads.value.map(t => t.id === id ? { ...t, isOpen: false } : t)
+    }
+    if (activeId.value === id) activeId.value = null
+  })
   persist()
 }
 

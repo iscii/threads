@@ -271,11 +271,9 @@
    ─────────────────────────────────────────────────────────────────── */
 [data-thr-id] {
   position: relative;
-  padding: 6px 36px 6px 10px;
-  margin: 0 0 1px -10px;
   border-radius: 7px;
-  border-left: 2px solid transparent;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  box-shadow: inset 2px 0 0 transparent;
+  transition: background 0.12s ease, box-shadow 0.12s ease;
 }
 
 [data-thr-id]:hover {
@@ -285,7 +283,7 @@
 [data-thr-id][data-thr-state=has-thread],
 [data-thr-id][data-thr-state=active] {
   background: rgba(201,138,82,0.04);
-  border-left-color: #c98a52;
+  box-shadow: inset 2px 0 0 #c98a52;
 }
 
 [data-thr-trigger] {
