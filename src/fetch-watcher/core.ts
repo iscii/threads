@@ -7,6 +7,11 @@ export function createFetchWatcher(
 ) {
   let stagedSummaries: string[] = []
 
+  window.addEventListener('summaryEnqueued', (e: Event) => {
+    const customEvent = e as CustomEvent<{ text: string }>
+    stagedSummaries.push(customEvent.detail.text)
+  })
+
   function handleMessage(event: MessageEvent): void {
     if (event.source !== window) return
     const data = event.data as { type?: string; summaryTexts?: string[] }
@@ -61,13 +66,13 @@ export function createFetchWatcher(
         modifiedInit = { ...init, body: JSON.stringify(result.body) }
         stagedSummaries = []
         injected = true
+        window.dispatchEvent(new CustomEvent('drainSummaries'))
       } else {
         console.warn('[fw] inject() could not match body shape — request shape may have changed. Summaries kept for next request. Body keys:', Object.keys(body as object))
       }
     }
 
     const response = await originalFetch(input, modifiedInit)
-
     if (!response.body) {
       if (injected) {
         window.postMessage({ type: adapter.messages.summaryInjected }, location.origin)

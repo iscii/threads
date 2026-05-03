@@ -36,6 +36,10 @@ export const claudeAdapter: NetworkAdapter = {
     streamComplete: CLAUDE_MSG.STREAM_COMPLETE,
   },
 
+  isStreamDone(chunk: string): boolean {
+    return chunk.includes('data: [DONE]')
+  },
+
   inject(body: unknown, summaries: string[]): { body: unknown; injected: boolean } {
     if (!isPromptBody(body)) return { body, injected: false }
 
