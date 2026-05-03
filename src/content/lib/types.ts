@@ -12,8 +12,6 @@ export interface DOMLayerCallbacks {
   onBlocksFound(blocks: BlockDescriptor[]): void
   /** Fired when user clicks the trigger button on a block. */
   onBlockTriggerClicked(blockId: string): void
-  /** Fired when user clicks the thread dot on a block (re-open). */
-  onDotClicked(blockId: string): void
   /** Fired when SPA navigation changes the active conversation. */
   onConversationChanged(): void
 }
@@ -21,12 +19,10 @@ export interface DOMLayerCallbacks {
 export interface DOMLayerAPI {
   /** Wraps block elements, injects trigger buttons, shows zone. Called by coordinator on onBlocksFound. */
   instrumentBlocks(blocks: BlockDescriptor[]): void
-  /** Returns the shadow root of the thread zone host for Preact rendering. Always non-null — shadow root is attached during construction. */
+  /** Returns the shadow root of the thread zone host for Preact rendering. */
   getShadowRoot(): ShadowRoot
   /** Sets data-thr-state on the block wrapper for the styling layer to read. */
   setBlockState(blockId: string, state: 'idle' | 'has-thread' | 'active'): void
-  /** Adds or removes the inline dot element after the block. */
-  setDotVisible(blockId: string, visible: boolean): void
   /** Returns the viewport-relative top of the block wrapper. */
   getBlockTop(blockId: string): number
   /** Disconnects the ResizeObserver and removes the host from the DOM. Call on conversation change. */

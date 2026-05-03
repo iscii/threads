@@ -14,18 +14,18 @@ afterEach(() => { document.body.innerHTML = '' })
 
 describe('thread zone host', () => {
   it('appends a host element to document.body on creation', () => {
-    createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    createInjector({ onBlockTriggerClicked: vi.fn() })
     expect(document.body.querySelector('[data-thr-zone]')).not.toBeNull()
   })
 
   it('starts with display none', () => {
-    createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    createInjector({ onBlockTriggerClicked: vi.fn() })
     const host = document.body.querySelector<HTMLElement>('[data-thr-zone]')!
     expect(host.style.display).toBe('none')
   })
 
   it('becomes visible after instrumentBlocks', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
     const p = makeBlock()
     document.body.appendChild(p)
     injector.instrumentBlocks([makeDescriptor(p)])
@@ -34,15 +34,15 @@ describe('thread zone host', () => {
   })
 
   it('getShadowRoot returns the shadow root of the host', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
     const host = document.body.querySelector('[data-thr-zone]')!
     expect(injector.getShadowRoot()).toBe(host.shadowRoot)
   })
 })
 
 describe('block instrumentation', () => {
-  it('wraps the block p in a div with data-thr-id', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+  it('applies data-thr-id directly to the block p without reparenting', () => {
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
     const p = makeBlock('Hello')
     const parent = document.createElement('div')
     parent.appendChild(p)
@@ -50,13 +50,12 @@ describe('block instrumentation', () => {
 
     injector.instrumentBlocks([makeDescriptor(p, 'id001')])
 
-    const wrapper = parent.querySelector('[data-thr-id="id001"]')
-    expect(wrapper).not.toBeNull()
-    expect(wrapper!.contains(p)).toBe(true)
+    expect(p.dataset.thrId).toBe('id001')
+    expect(p.parentNode).toBe(parent)
   })
 
-  it('injects a trigger button inside the wrapper', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+  it('injects a trigger button inside the block p', () => {
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
     const p = makeBlock()
     const parent = document.createElement('div')
     parent.appendChild(p)
@@ -64,12 +63,11 @@ describe('block instrumentation', () => {
 
     injector.instrumentBlocks([makeDescriptor(p, 'id002')])
 
-    const wrapper = parent.querySelector('[data-thr-id="id002"]')!
-    expect(wrapper.querySelector('[data-thr-trigger]')).not.toBeNull()
+    expect(p.querySelector('[data-thr-trigger]')).not.toBeNull()
   })
 
-  it('is idempotent — calling twice with same block does not double-wrap', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+  it('is idempotent — calling twice with same block does not double-instrument', () => {
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
     const p = makeBlock()
     const parent = document.createElement('div')
     parent.appendChild(p)
@@ -79,12 +77,12 @@ describe('block instrumentation', () => {
     injector.instrumentBlocks([desc])
     injector.instrumentBlocks([desc])
 
-    expect(parent.querySelectorAll('[data-thr-id="id003"]')).toHaveLength(1)
+    expect(p.querySelectorAll('[data-thr-trigger]')).toHaveLength(1)
   })
 
   it('trigger button click calls onBlockTriggerClicked with block id', () => {
     const onBlockTriggerClicked = vi.fn()
-    const injector = createInjector({ onBlockTriggerClicked, onDotClicked: vi.fn() })
+    const injector = createInjector({ onBlockTriggerClicked })
     const p = makeBlock()
     const parent = document.createElement('div')
     parent.appendChild(p)
@@ -92,7 +90,7 @@ describe('block instrumentation', () => {
 
     injector.instrumentBlocks([makeDescriptor(p, 'id004')])
 
-    const btn = parent.querySelector<HTMLButtonElement>('[data-thr-trigger]')!
+    const btn = p.querySelector<HTMLButtonElement>('[data-thr-trigger]')!
     btn.click()
 
     expect(onBlockTriggerClicked).toHaveBeenCalledWith('id004')
@@ -100,8 +98,8 @@ describe('block instrumentation', () => {
 })
 
 describe('setBlockState', () => {
-  it('sets data-thr-state on the wrapper element', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+  it('sets data-thr-state on the block p', () => {
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
     const p = makeBlock()
     const parent = document.createElement('div')
     parent.appendChild(p)
@@ -110,70 +108,18 @@ describe('setBlockState', () => {
     injector.instrumentBlocks([makeDescriptor(p, 'id005')])
     injector.setBlockState('id005', 'has-thread')
 
-    const wrapper = parent.querySelector('[data-thr-id="id005"]')!
-    expect(wrapper.getAttribute('data-thr-state')).toBe('has-thread')
+    expect(p.getAttribute('data-thr-state')).toBe('has-thread')
   })
 
   it('is a no-op for unknown block ids', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
     expect(() => injector.setBlockState('unknown', 'active')).not.toThrow()
-  })
-})
-
-describe('setDotVisible', () => {
-  it('adds a dot span after the block when visible=true', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
-    const p = makeBlock()
-    const parent = document.createElement('div')
-    parent.appendChild(p)
-    document.body.appendChild(parent)
-
-    injector.instrumentBlocks([makeDescriptor(p, 'id006')])
-    injector.setDotVisible('id006', true)
-
-    expect(parent.querySelector('[data-thr-dot]')).not.toBeNull()
-  })
-
-  it('removes the dot span when visible=false', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
-    const p = makeBlock()
-    const parent = document.createElement('div')
-    parent.appendChild(p)
-    document.body.appendChild(parent)
-
-    injector.instrumentBlocks([makeDescriptor(p, 'id007')])
-    injector.setDotVisible('id007', true)
-    injector.setDotVisible('id007', false)
-
-    expect(parent.querySelector('[data-thr-dot]')).toBeNull()
-  })
-
-  it('dot click calls onDotClicked with block id', () => {
-    const onDotClicked = vi.fn()
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked })
-    const p = makeBlock()
-    const parent = document.createElement('div')
-    parent.appendChild(p)
-    document.body.appendChild(parent)
-
-    injector.instrumentBlocks([makeDescriptor(p, 'id008')])
-    injector.setDotVisible('id008', true)
-
-    const dot = parent.querySelector<HTMLSpanElement>('[data-thr-dot]')!
-    dot.click()
-
-    expect(onDotClicked).toHaveBeenCalledWith('id008')
-  })
-
-  it('is a no-op for unknown block ids', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
-    expect(() => injector.setDotVisible('unknown', true)).not.toThrow()
   })
 })
 
 describe('getBlockTop', () => {
   it('returns a number for a known block id', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
     const p = makeBlock()
     const parent = document.createElement('div')
     parent.appendChild(p)
@@ -185,21 +131,21 @@ describe('getBlockTop', () => {
   })
 
   it('returns 0 for an unknown block id', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
     expect(injector.getBlockTop('unknown')).toBe(0)
   })
 })
 
 describe('instrumentBlocks edge cases', () => {
   it('skips detached block elements without throwing', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
     const p = makeBlock('Detached')
     // p is not appended to any parent — parentNode is null
     expect(() => injector.instrumentBlocks([makeDescriptor(p, 'detached')])).not.toThrow()
   })
 
   it('does not show zone when all descriptors are detached', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
     const p = makeBlock()
     injector.instrumentBlocks([makeDescriptor(p, 'detached2')])
     const host = document.body.querySelector<HTMLElement>('[data-thr-zone]')!
@@ -207,7 +153,7 @@ describe('instrumentBlocks edge cases', () => {
   })
 
   it('does not show zone when instrumentBlocks called with empty array', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
     injector.instrumentBlocks([])
     const host = document.body.querySelector<HTMLElement>('[data-thr-zone]')!
     expect(host.style.display).toBe('none')
@@ -216,14 +162,14 @@ describe('instrumentBlocks edge cases', () => {
 
 describe('destroy', () => {
   it('removes the host from document.body', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
     expect(document.body.querySelector('[data-thr-zone]')).not.toBeNull()
     injector.destroy()
     expect(document.body.querySelector('[data-thr-zone]')).toBeNull()
   })
 
   it('is safe to call multiple times', () => {
-    const injector = createInjector({ onBlockTriggerClicked: vi.fn(), onDotClicked: vi.fn() })
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
     expect(() => { injector.destroy(); injector.destroy() }).not.toThrow()
   })
 })

@@ -110,3 +110,37 @@ describe('history.filter', () => {
     expect(claudeAdapter.history!.filter({ other: true })).toEqual({ other: true })
   })
 })
+
+describe('buildCompletion', () => {
+  it('spreads base body and substitutes prompt', () => {
+    const base = { prompt: 'original', model: 'claude-sonnet-4-6', other: 'value' }
+    const result = claudeAdapter.buildCompletion(base, 'new prompt') as any
+    expect(result.prompt).toBe('new prompt')
+    expect(result.other).toBe('value')
+    expect(result.model).toBe('claude-sonnet-4-6')
+  })
+
+  it('overrides model when provided', () => {
+    const base = { prompt: 'x', model: 'claude-sonnet-4-6' }
+    const result = claudeAdapter.buildCompletion(base, 'x', 'claude-haiku-4-5-20251001') as any
+    expect(result.model).toBe('claude-haiku-4-5-20251001')
+  })
+
+  it('generates fresh turn_message_uuids', () => {
+    const base = {
+      prompt: 'x',
+      turn_message_uuids: { human_message_uuid: 'old-h', assistant_message_uuid: 'old-a' },
+    }
+    const result = claudeAdapter.buildCompletion(base, 'x') as any
+    expect(result.turn_message_uuids.human_message_uuid).not.toBe('old-h')
+    expect(result.turn_message_uuids.human_message_uuid).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    )
+  })
+
+  it('returns body unchanged when not a prompt body', () => {
+    const notPrompt = { messages: [] }
+    const result = claudeAdapter.buildCompletion(notPrompt, 'x')
+    expect(result).toBe(notPrompt)
+  })
+})

@@ -98,3 +98,36 @@ describe('findHeader', () => {
     expect(claudeDOMAdapter.findHeader()).toBe(el)
   })
 })
+
+describe('findChatContainer', () => {
+  afterEach(() => { document.body.innerHTML = '' })
+
+  it('finds the response column inside the scroll container', () => {
+    const scroll = document.createElement('div')
+    scroll.setAttribute('data-autoscroll-container', 'true')
+    const inner = document.createElement('div')
+    inner.className = 'max-w-3xl px-4 flex-1'
+    scroll.appendChild(inner)
+    document.body.appendChild(scroll)
+    expect(claudeDOMAdapter.findChatContainer()).toBe(inner)
+  })
+
+  it('returns null when not present', () => {
+    expect(claudeDOMAdapter.findChatContainer()).toBeNull()
+  })
+})
+
+describe('findHeaderActions', () => {
+  afterEach(() => { document.body.innerHTML = '' })
+
+  it('finds the wiggle-controls-actions container', () => {
+    const el = document.createElement('div')
+    el.setAttribute('data-testid', 'wiggle-controls-actions')
+    document.body.appendChild(el)
+    expect(claudeDOMAdapter.findHeaderActions()).toBe(el)
+  })
+
+  it('returns null when not present', () => {
+    expect(claudeDOMAdapter.findHeaderActions()).toBeNull()
+  })
+})
