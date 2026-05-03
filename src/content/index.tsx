@@ -42,18 +42,20 @@ if (platform) {
     render(<App coordinator={coordinator} domAdapter={platform.domAdapter} />, root)
   }
 
-  function mountBadge(): void {
+  function syncBadge(): void {
+    const container = platform.domAdapter.findHeaderActions()
+    if (badgeRoot?.parentElement === container) return
     if (badgeRoot) render(null, badgeRoot)
-    const actionsContainer = platform.domAdapter.findHeaderActions()
-    if (!actionsContainer) { badgeRoot = null; return }
+    if (!container) { badgeRoot = null; return }
     badgeRoot = document.createElement('div')
-    actionsContainer.insertBefore(badgeRoot, actionsContainer.firstChild)
+    container.insertBefore(badgeRoot, container.firstChild)
     render(<Badge />, badgeRoot)
   }
 
   const shadow = coordinator.getShadowRoot()
-  coordinator.setOnReset((root) => { mountPreact(root); mountBadge() })
+  coordinator.setOnReset(mountPreact)
   mountPreact(shadow)
   coordinator.start()
-  mountBadge()
+  new MutationObserver(syncBadge).observe(document.body, { childList: true, subtree: true })
+  syncBadge()
 }

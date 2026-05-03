@@ -4,12 +4,15 @@ import { summaryStatus, endpointInfo } from '../lib/threads'
 import { dirtyThreads, advanceMarks, enqueue, drainQueue } from '../lib/summaryStore'
 import { accumulateSSE } from '../lib/accumulateSSE'
 import { sameOriginURL } from '../lib/endpoint'
-import { MSG } from '@/messaging'
 
 let _networkAdapter: NetworkAdapter | null = null
 
 export function initSummary(networkAdapter: NetworkAdapter): void {
   _networkAdapter = networkAdapter
+  // syncronous custom window event for summary queue draining in fetch watcher
+  window.addEventListener('drainSummaries', () => {
+    drainQueue()
+  })
 }
 
 function buildSummarizationPrompt(dirty: Thread[]): string {
@@ -59,13 +62,11 @@ export async function triggerSummarization(): Promise<void> {
       coveredTurnCounts: Object.fromEntries(dirty.map(t => [t.blockId, t.messages.length])),
       generatedAt: Date.now(),
     })
+    window.dispatchEvent(new CustomEvent('summaryEnqueued', { detail: { text: text } }))
     advanceMarks()
-    window.postMessage(
-      { type: MSG.STAGE_SUMMARY, summaryTexts: drainQueue().map(i => i.text) },
-      location.origin,
-    )
-    summaryStatus.value = 'included'
   } catch {
+    // swallow — dirty threads remain for next attempt
+  } finally {
     summaryStatus.value = 'idle'
   }
 }

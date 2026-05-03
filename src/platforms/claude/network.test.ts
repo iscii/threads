@@ -1,5 +1,17 @@
 import { claudeAdapter } from './network'
 
+describe('isStreamDone', () => {
+  it('returns true when chunk contains data: [DONE]', () => {
+    expect(claudeAdapter.isStreamDone!('data: [DONE]\n')).toBe(true)
+    expect(claudeAdapter.isStreamDone!('data: {"completion":"hi"}\n\ndata: [DONE]\n')).toBe(true)
+  })
+
+  it('returns false for regular data chunks', () => {
+    expect(claudeAdapter.isStreamDone!('data: {"completion":"hello"}\n')).toBe(false)
+    expect(claudeAdapter.isStreamDone!('')).toBe(false)
+  })
+})
+
 describe('urlPattern', () => {
   it('matches the completion endpoint', () => {
     expect(claudeAdapter.urlPattern.test(
