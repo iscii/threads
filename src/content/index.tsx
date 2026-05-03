@@ -29,6 +29,7 @@ if (platform) {
   const coordinator = createCoordinator(platform.domAdapter)
 
   let currentRoot: ShadowRoot | null = null
+  let badgeRoot: HTMLDivElement | null = null
 
   function mountPreact(root: ShadowRoot): void {
     if (currentRoot && currentRoot !== root) {
@@ -41,15 +42,18 @@ if (platform) {
     render(<App coordinator={coordinator} domAdapter={platform.domAdapter} />, root)
   }
 
-  const shadow = coordinator.getShadowRoot()
-  coordinator.setOnReset(mountPreact)
-  mountPreact(shadow)
-  coordinator.start()
-
-  const actionsContainer = platform.domAdapter.findHeaderActions()
-  if (actionsContainer) {
-    const badgeRoot = document.createElement('div')
+  function mountBadge(): void {
+    if (badgeRoot) render(null, badgeRoot)
+    const actionsContainer = platform.domAdapter.findHeaderActions()
+    if (!actionsContainer) { badgeRoot = null; return }
+    badgeRoot = document.createElement('div')
     actionsContainer.insertBefore(badgeRoot, actionsContainer.firstChild)
     render(<Badge />, badgeRoot)
   }
+
+  const shadow = coordinator.getShadowRoot()
+  coordinator.setOnReset((root) => { mountPreact(root); mountBadge() })
+  mountPreact(shadow)
+  coordinator.start()
+  mountBadge()
 }
