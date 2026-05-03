@@ -15,7 +15,7 @@ export type Thread = {
 
 export const threads = signal<Thread[]>([])
 export const activeId = signal<string | null>(null)
-export const summaryStatus = signal<'idle' | 'summarizing' | 'included'>('idle')
+export const summaryStatus = signal<'idle' | 'summarizing'>('idle')
 export const endpointInfo = signal<{ url: string; body: unknown } | null>(null)
 
 function persist(): void {
