@@ -18,6 +18,7 @@ function makeAdapter() {
     urlPattern: claudeAdapter.urlPattern,
     messages: MSG_TYPES,
     inject: vi.fn().mockReturnValue({ body: { messages: [{ role: 'user', content: 'injected' }] }, injected: true }),
+    buildCompletion: vi.fn(),
   }
 }
 
@@ -103,6 +104,56 @@ describe('endpoint captured', () => {
     )
     expect(captured).toBeDefined()
     expect(captured.url).toBe(COMPLETION_URL)
+    expect(captured.body).toEqual(body)
+
+    messages.cleanup()
+  })
+
+  it('emits storable request headers', async () => {
+    const originalFetch = vi.fn().mockResolvedValue(makeResponse())
+    const adapter = makeAdapter()
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+    const messages = collectMessages()
+
+    await interceptFetch(COMPLETION_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-csrf-token': 'token1',
+        authorization: 'Bearer private',
+      },
+      body: JSON.stringify({ prompt: 'Hello' }),
+    })
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+
+    const captured = messages.get().find(
+      (m) => m.type === MSG_TYPES.endpointCaptured,
+    )
+    expect(captured.headers).toEqual({
+      'content-type': 'application/json',
+      'x-csrf-token': 'token1',
+    })
+
+    messages.cleanup()
+  })
+
+  it('reads body from Request input when init has none', async () => {
+    const originalFetch = vi.fn().mockResolvedValue(makeResponse())
+    const adapter = makeAdapter()
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+    const messages = collectMessages()
+    const body = { prompt: 'Hello' }
+
+    await interceptFetch(new Request(COMPLETION_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }))
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+
+    const captured = messages.get().find(
+      (m) => m.type === MSG_TYPES.endpointCaptured,
+    )
     expect(captured.body).toEqual(body)
 
     messages.cleanup()
@@ -375,6 +426,39 @@ describe('history filtering', () => {
 
     expect(filter).toHaveBeenCalledWith(rawBody)
     expect(json).toEqual(filteredBody)
+  })
+
+  it('emits conversation GET body and headers for endpoint variable capture', async () => {
+    const originalFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ chat_messages: [] }), { status: 200 })
+    )
+    const adapter = {
+      ...makeAdapter(),
+      history: {
+        urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
+        filter: vi.fn((body: unknown) => body),
+      },
+    }
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+    const messages = collectMessages()
+
+    await interceptFetch(HISTORY_URL, {
+      method: 'GET',
+      headers: { 'x-csrf-token': 'fresh' },
+    })
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+
+    const captured = messages.get().reverse().find(
+      (m) => m.type === MSG_TYPES.endpointCaptured && m.url === HISTORY_URL,
+    )
+    expect(captured).toEqual({
+      type: MSG_TYPES.endpointCaptured,
+      url: HISTORY_URL,
+      body: { chat_messages: [] },
+      headers: { 'x-csrf-token': 'fresh' },
+    })
+
+    messages.cleanup()
   })
 
   it('passes through GET response unchanged when response is not ok', async () => {
