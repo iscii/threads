@@ -1,3 +1,14 @@
+export interface EndpointShape {
+  url: string
+  body: unknown
+}
+
+export interface EndpointVars {
+  organizationUuid: string
+  conversationUuid: string
+  parentMessageUuid?: string
+}
+
 export interface NetworkAdapter {
   urlPattern: RegExp
   messages: {
@@ -7,6 +18,9 @@ export interface NetworkAdapter {
   }
   inject(body: unknown, summaries: string[]): { body: unknown; injected: boolean }
   buildCompletion(capturedBody: unknown, prompt: string, model?: string): unknown
+  captureCompletion?(url: string, body: unknown): EndpointShape | null
+  captureEndpointVars?(url: string, body: unknown): EndpointVars | null
+  buildEndpoint?(shape: EndpointShape, vars: EndpointVars): EndpointShape | null
   isStreamDone?(chunk: string): boolean
   history?: {
     urlPattern: RegExp
