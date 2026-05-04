@@ -10,7 +10,10 @@ function makeDescriptor(p: HTMLParagraphElement, id = 'abc12345') {
   return { id, element: p, text: p.textContent ?? '' }
 }
 
-afterEach(() => { document.body.innerHTML = '' })
+afterEach(() => {
+  vi.restoreAllMocks()
+  document.body.innerHTML = ''
+})
 
 describe('thread zone host', () => {
   it('appends a host element to document.body on creation', () => {
@@ -37,6 +40,69 @@ describe('thread zone host', () => {
     const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
     const host = document.body.querySelector('[data-thr-zone]')!
     expect(injector.getShadowRoot()).toBe(host.shadowRoot)
+  })
+
+  it('places the thread panel just to the right of the chat when space allows', () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1200)
+    const chat = document.createElement('div')
+    vi.spyOn(chat, 'getBoundingClientRect').mockReturnValue({
+      left: 100,
+      right: 700,
+      top: 0,
+      bottom: 500,
+      width: 600,
+      height: 500,
+      x: 100,
+      y: 0,
+      toJSON: () => ({}),
+    })
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() }, () => null, () => null, () => chat)
+    const p = makeBlock()
+    document.body.appendChild(p)
+
+    injector.instrumentBlocks([makeDescriptor(p)])
+
+    const host = document.body.querySelector<HTMLElement>('[data-thr-zone]')!
+    expect(host.style.left).toBe('696px')
+    expect(host.dataset.thrOverlay).toBe('false')
+  })
+
+  it('overlays the thread panel inside the chat when the viewport is narrow', () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(760)
+    const chat = document.createElement('div')
+    vi.spyOn(chat, 'getBoundingClientRect').mockReturnValue({
+      left: 100,
+      right: 700,
+      top: 0,
+      bottom: 500,
+      width: 600,
+      height: 500,
+      x: 100,
+      y: 0,
+      toJSON: () => ({}),
+    })
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() }, () => null, () => null, () => chat)
+    const p = makeBlock()
+    document.body.appendChild(p)
+
+    injector.instrumentBlocks([makeDescriptor(p)])
+
+    const host = document.body.querySelector<HTMLElement>('[data-thr-zone]')!
+    expect(host.style.left).toBe('396px')
+    expect(host.dataset.thrOverlay).toBe('true')
+  })
+
+  it('keeps the thread zone inside the viewport when no chat container is available', () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(260)
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
+    const p = makeBlock()
+    document.body.appendChild(p)
+
+    injector.instrumentBlocks([makeDescriptor(p)])
+
+    const host = document.body.querySelector<HTMLElement>('[data-thr-zone]')!
+    expect(host.style.left).toBe('8px')
+    expect(host.dataset.thrOverlay).toBe('true')
   })
 })
 
@@ -78,6 +144,41 @@ describe('block instrumentation', () => {
     injector.instrumentBlocks([desc])
 
     expect(p.querySelectorAll('[data-thr-trigger]')).toHaveLength(1)
+  })
+
+  it('replaces stale block entries after responsive DOM re-render', () => {
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
+    const oldBlock = makeBlock()
+    const oldParent = document.createElement('div')
+    oldParent.appendChild(oldBlock)
+    document.body.appendChild(oldParent)
+
+    const desc = makeDescriptor(oldBlock, 'same-id')
+    injector.instrumentBlocks([desc])
+    oldParent.remove()
+
+    const newBlock = makeBlock()
+    const newParent = document.createElement('div')
+    newParent.appendChild(newBlock)
+    document.body.appendChild(newParent)
+    vi.spyOn(newBlock, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      right: 100,
+      top: 250,
+      bottom: 270,
+      width: 100,
+      height: 20,
+      x: 0,
+      y: 250,
+      toJSON: () => ({}),
+    })
+
+    injector.instrumentBlocks([makeDescriptor(newBlock, 'same-id')])
+
+    expect(oldBlock.dataset.thrId).toBeUndefined()
+    expect(newBlock.dataset.thrId).toBe('same-id')
+    expect(newBlock.querySelectorAll('[data-thr-trigger]')).toHaveLength(1)
+    expect(injector.getBlockTop('same-id')).toBe(250)
   })
 
   it('trigger button click calls onBlockTriggerClicked with block id', () => {
