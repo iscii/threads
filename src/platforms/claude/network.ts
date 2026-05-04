@@ -7,7 +7,6 @@ import {
 } from '@/messaging'
 import { CLAUDE_MSG } from './messaging'
 
-const HAIKU_MODEL = 'claude-haiku-4-5-20251001'
 const COMPLETION_TEMPLATE =
   '/api/organizations/{organizationUuid}/chat_conversations/{conversationUuid}/completion'
 
@@ -115,7 +114,6 @@ export const claudeAdapter: NetworkAdapter = {
         .replace('{conversationUuid}', vars.conversationUuid),
       body: {
         ...shape.body,
-        model: HAIKU_MODEL,
         ...(vars.parentMessageUuid ? { parent_message_uuid: vars.parentMessageUuid } : {}),
       },
     }
@@ -198,12 +196,13 @@ function sanitizePromptBody(body: PromptBody): PromptBody {
     attachments: arrayValue(body.attachments),
     files: arrayValue(body.files),
     locale: stringValue(body.locale) ?? 'en-US',
-    model: HAIKU_MODEL,
     personalized_styles: arrayValue(body.personalized_styles),
     rendering_mode: stringValue(body.rendering_mode) ?? 'messages',
     sync_sources: arrayValue(body.sync_sources),
     tools: arrayValue(body.tools),
   }
+  const model = stringValue(body.model)
+  if (model) sanitized.model = model
   const timezone = stringValue(body.timezone)
   if (timezone) sanitized.timezone = timezone
   return sanitized

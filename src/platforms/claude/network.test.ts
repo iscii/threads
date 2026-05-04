@@ -247,7 +247,7 @@ describe('endpoint capture', () => {
   const completionUrl =
     '/api/organizations/org123/chat_conversations/conv456/completion'
 
-  it('stores a sanitized generic completion shape', () => {
+  it('stores a sanitized generic completion shape and preserves the original model', () => {
     const result = claudeAdapter.captureCompletion!(completionUrl, {
       prompt: 'secret user prompt',
       parent_message_uuid: 'parent-old',
@@ -271,7 +271,7 @@ describe('endpoint capture', () => {
       '/api/organizations/{organizationUuid}/chat_conversations/{conversationUuid}/completion',
     )
     expect(result.body.prompt).toBe('')
-    expect(result.body.model).toBe('claude-haiku-4-5-20251001')
+    expect(result.body.model).toBe('claude-sonnet-4-6')
     expect(result.body.parent_message_uuid).toBeUndefined()
     expect(result.body.turn_message_uuids).toBeUndefined()
     expect(result.body.extra_secret).toBeUndefined()
@@ -309,7 +309,7 @@ describe('endpoint capture', () => {
     })
   })
 
-  it('builds a concrete haiku endpoint from shape and variables', () => {
+  it('builds a concrete endpoint from shape and variables without rewriting the model', () => {
     const built = claudeAdapter.buildEndpoint!(
       {
         url: '/api/organizations/{organizationUuid}/chat_conversations/{conversationUuid}/completion',
@@ -323,7 +323,7 @@ describe('endpoint capture', () => {
     ) as any
 
     expect(built.url).toBe(completionUrl)
-    expect(built.body.model).toBe('claude-haiku-4-5-20251001')
+    expect(built.body.model).toBe('claude-sonnet-4-6')
     expect(built.body.parent_message_uuid).toBe('parent1')
   })
 })

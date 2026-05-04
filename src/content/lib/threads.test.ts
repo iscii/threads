@@ -113,7 +113,7 @@ describe('endpoint storage', () => {
 
     setEndpointShape({
       url: '/chat_conversations/{conversationUuid}/completion',
-      body: { prompt: '', model: 'claude-haiku-4-5-20251001' },
+      body: { prompt: '', model: 'claude-sonnet-4-6' },
     })
     setEndpointVars({
       organizationUuid: 'org1',
