@@ -93,6 +93,78 @@ describe('history.filter', () => {
     expect(result.chat_messages[0].content[0].text).toBe('Hello')
   })
 
+  it('removes internal summary turns and their assistant responses', () => {
+    const body = {
+      chat_messages: [
+        {
+          uuid: 'hidden-human',
+          sender: 'human',
+          content: [{
+            type: 'text',
+            text: '<threads-internal kind="summary">\nHidden\n</threads-internal>\n\nYou are a deterministic text summarization function.',
+          }],
+        },
+        {
+          sender: 'assistant',
+          parent_message_uuid: 'hidden-human',
+          content: [{ type: 'text', text: '{"block":"summary"}' }],
+        },
+        { sender: 'human', content: [{ type: 'text', text: 'Visible message' }] },
+      ],
+    }
+
+    const result = claudeAdapter.history!.filter(body) as any
+
+    expect(result.chat_messages).toHaveLength(1)
+    expect(result.chat_messages[0].content[0].text).toBe('Visible message')
+  })
+
+  it('removes legacy internal summary turns and their assistant responses', () => {
+    const body = {
+      chat_messages: [
+        {
+          message_uuid: 'legacy-hidden-human',
+          sender: 'human',
+          content: [{
+            type: 'text',
+            text: 'You are a deterministic text summarization function.\nReturn only JSON.',
+          }],
+        },
+        {
+          sender: 'assistant',
+          parent_message: { message_uuid: 'legacy-hidden-human' },
+          content: [{ type: 'text', text: '{"block":"summary"}' }],
+        },
+        { sender: 'assistant', content: [{ type: 'text', text: 'Visible assistant' }] },
+      ],
+    }
+
+    const result = claudeAdapter.history!.filter(body) as any
+
+    expect(result.chat_messages).toHaveLength(1)
+    expect(result.chat_messages[0].content[0].text).toBe('Visible assistant')
+  })
+
+  it('preserves visible assistant messages that are not linked to an internal prompt', () => {
+    const body = {
+      chat_messages: [
+        {
+          sender: 'human',
+          content: [{
+            type: 'text',
+            text: '<threads-internal kind="summary">\nHidden\n</threads-internal>\n\nYou are a deterministic text summarization function.',
+          }],
+        },
+        { sender: 'assistant', content: [{ type: 'text', text: 'Visible assistant' }] },
+      ],
+    }
+
+    const result = claudeAdapter.history!.filter(body) as any
+
+    expect(result.chat_messages).toHaveLength(1)
+    expect(result.chat_messages[0].content[0].text).toBe('Visible assistant')
+  })
+
   it('leaves assistant messages untouched', () => {
     const body = {
       chat_messages: [{ sender: 'assistant', content: [{ type: 'text', text: 'Response' }] }],
@@ -120,6 +192,20 @@ describe('history.filter', () => {
   it('returns body unchanged for unrecognized shapes', () => {
     expect(claudeAdapter.history!.filter(null)).toBeNull()
     expect(claudeAdapter.history!.filter({ other: true })).toEqual({ other: true })
+  })
+})
+
+describe('filterResponseText', () => {
+  it('strips literal injected context from streamed text', () => {
+    expect(
+      claudeAdapter.filterResponseText!('<threads-context>\nSummary\n</threads-context>\n\nHello'),
+    ).toBe('Hello')
+  })
+
+  it('strips escaped injected context from streamed JSON text', () => {
+    expect(
+      claudeAdapter.filterResponseText!('{"text":"<threads-context>\\nSummary\\n</threads-context>\\n\\nHello"}'),
+    ).toBe('{"text":"Hello"}')
   })
 })
 

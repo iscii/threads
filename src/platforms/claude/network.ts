@@ -1,5 +1,10 @@
 import type { EndpointShape, EndpointVars, NetworkAdapter } from '@/types'
-import { THR_CONTEXT_TAG, THR_CONTEXT_STRIP_RE } from '@/messaging'
+import {
+  THR_CONTEXT_ESCAPED_STRIP_RE,
+  THR_CONTEXT_TAG,
+  THR_CONTEXT_STRIP_RE,
+  THR_INTERNAL_STRIP_RE,
+} from '@/messaging'
 import { CLAUDE_MSG } from './messaging'
 
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001'
@@ -42,6 +47,10 @@ export const claudeAdapter: NetworkAdapter = {
 
   isStreamDone(chunk: string): boolean {
     return chunk.includes('data: [DONE]')
+  },
+
+  filterResponseText(chunk: string): string {
+    return stripInjectedContext(chunk)
   },
 
   inject(body: unknown, summaries: string[]): { body: unknown; injected: boolean } {
@@ -113,26 +122,74 @@ export const claudeAdapter: NetworkAdapter = {
   },
 
   history: {
-    urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
+    urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+(?:\?|$)/,
 
     filter(body: unknown): unknown {
       if (!isConversationBody(body)) return body
+      const chatMessages: ChatMessage[] = []
+      const internalHumanIds = new Set<string>()
+
+      for (const msg of body.chat_messages) {
+        if (msg.sender !== 'human' || !isInternalMessage(msg)) continue
+        const uuid = messageUuid(msg)
+        if (uuid) internalHumanIds.add(uuid)
+      }
+
+      for (const msg of body.chat_messages) {
+        if (msg.sender === 'assistant' && shouldRemoveInternalAssistant(msg, internalHumanIds)) {
+          continue
+        }
+
+        if (msg.sender === 'human' && isInternalMessage(msg)) {
+          continue
+        }
+
+        chatMessages.push(stripHumanContext(msg))
+      }
+
       return {
         ...body,
-        chat_messages: body.chat_messages.map(msg => {
-          if (msg.sender !== 'human') return msg
-          return {
-            ...msg,
-            content: msg.content.map(block =>
-              block.type === 'text'
-                ? { ...block, text: block.text.replace(THR_CONTEXT_STRIP_RE, '') }
-                : block
-            ),
-          }
-        }),
+        chat_messages: chatMessages,
       }
     },
   },
+}
+
+export function stripInjectedContext(text: string): string {
+  return text
+    .replace(THR_CONTEXT_STRIP_RE, '')
+    .replace(THR_CONTEXT_ESCAPED_STRIP_RE, '')
+}
+
+function stripHumanContext(msg: ChatMessage): ChatMessage {
+  if (msg.sender !== 'human') return msg
+  return {
+    ...msg,
+    content: msg.content.map(block =>
+      block.type === 'text'
+        ? { ...block, text: stripInjectedContext(block.text) }
+        : block
+    ),
+  }
+}
+
+function isInternalMessage(msg: ChatMessage): boolean {
+  return msg.content.some(block =>
+    block.type === 'text' &&
+    (
+      THR_INTERNAL_STRIP_RE.test(block.text) ||
+      block.text.startsWith('You are a deterministic text summarization function.')
+    )
+  )
+}
+
+function shouldRemoveInternalAssistant(
+  msg: ChatMessage,
+  internalHumanIds: Set<string>,
+): boolean {
+  if (internalHumanIds.size === 0) return false
+  const parentUuid = parentMessageUuid(msg)
+  return !!parentUuid && internalHumanIds.has(parentUuid)
 }
 
 function sanitizePromptBody(body: PromptBody): PromptBody {
@@ -189,6 +246,22 @@ function latestMessageUuid(body: unknown): string | undefined {
 
 function messageUuid(msg: ChatMessage): string | undefined {
   return stringValue(msg.uuid) ?? stringValue(msg.message_uuid) ?? stringValue(msg.id)
+}
+
+function parentMessageUuid(msg: ChatMessage): string | undefined {
+  const parentMessage = objectValue(msg.parent_message)
+  return (
+    stringValue(msg.parent_message_uuid) ??
+    stringValue(parentMessage?.uuid) ??
+    stringValue(parentMessage?.message_uuid) ??
+    stringValue(parentMessage?.id)
+  )
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null
+    ? value as Record<string, unknown>
+    : undefined
 }
 
 function stringValue(value: unknown): string | undefined {

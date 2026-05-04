@@ -1,4 +1,5 @@
 import type { NetworkAdapter } from '@/types'
+import { THR_INTERNAL_TAG } from '@/messaging'
 import {
   threads,
   endpointInfo,
@@ -52,7 +53,17 @@ export async function sendThreadReply(threadId: string, userText: string): Promi
   const history = (fresh?.messages ?? [])
     .map(m => `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`)
     .join('\n')
-  const prompt = `${systemPrompt}\n\n${history}\n\nAssistant:`
+  const prompt = [
+    `<${THR_INTERNAL_TAG} kind="thread-reply">`,
+    'Hidden Threads extension side-thread request.',
+    `</${THR_INTERNAL_TAG}>`,
+    '',
+    systemPrompt,
+    '',
+    history,
+    '',
+    'Assistant:',
+  ].join('\n')
 
   const body = na.buildCompletion(info.body, prompt)
 

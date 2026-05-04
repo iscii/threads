@@ -338,6 +338,27 @@ describe('stream monitoring', () => {
     messages.cleanup()
   })
 
+  it('filters returned stream text when adapter provides a response filter', async () => {
+    const originalFetch = vi.fn().mockResolvedValue(
+      makeResponse(makeStream('data: {"text":"<threads-context>\\nSummary\\n</threads-context>\\n\\nHello"}\n\n')),
+    )
+    const adapter = {
+      ...makeAdapter(),
+      filterResponseText: vi.fn((chunk: string) =>
+        chunk.replace('<threads-context>\\nSummary\\n</threads-context>\\n\\n', '')
+      ),
+    }
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+
+    const response = await interceptFetch(COMPLETION_URL, {
+      method: 'POST',
+      body: JSON.stringify({ prompt: 'Hello' }),
+    })
+
+    await expect(response.text()).resolves.toBe('data: {"text":"Hello"}\n\n')
+    expect(adapter.filterResponseText).toHaveBeenCalled()
+  })
+
   it('emits streamComplete early when isStreamDone returns true', async () => {
     const originalFetch = vi.fn().mockResolvedValue(
       makeResponse(makeStream('data: [DONE]')),

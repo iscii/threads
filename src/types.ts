@@ -22,6 +22,7 @@ export interface NetworkAdapter {
   captureEndpointVars?(url: string, body: unknown): EndpointVars | null
   buildEndpoint?(shape: EndpointShape, vars: EndpointVars): EndpointShape | null
   isStreamDone?(chunk: string): boolean
+  filterResponseText?(chunk: string): string
   history?: {
     urlPattern: RegExp
     filter(body: unknown): unknown

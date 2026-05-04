@@ -115,7 +115,7 @@ export function createFetchWatcher(
       window.postMessage({ type: adapter.messages.summaryInjected }, location.origin)
     }
 
-    return new Response(s1, {
+    return new Response(filterResponseStream(s1, adapter), {
       status: response.status,
       statusText: response.statusText,
       headers: response.headers,
@@ -123,6 +123,29 @@ export function createFetchWatcher(
   }
 
   return { interceptFetch, handleMessage }
+}
+
+function filterResponseStream(
+  stream: ReadableStream<Uint8Array>,
+  adapter: NetworkAdapter,
+): ReadableStream<Uint8Array> {
+  if (!adapter.filterResponseText) return stream
+
+  const decoder = new TextDecoder()
+  const encoder = new TextEncoder()
+
+  return stream.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      const text = decoder.decode(chunk, { stream: true })
+      const filtered = adapter.filterResponseText?.(text) ?? text
+      if (filtered.length > 0) controller.enqueue(encoder.encode(filtered))
+    },
+    flush(controller) {
+      const text = decoder.decode()
+      const filtered = adapter.filterResponseText?.(text) ?? text
+      if (filtered.length > 0) controller.enqueue(encoder.encode(filtered))
+    },
+  }))
 }
 
 async function requestBodyText(
