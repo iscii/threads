@@ -1,4 +1,15 @@
-import { highWaterMarks, summaryQueue, dirtyThreads, advanceMarks, enqueue, drainQueue, loadSummaryForConv } from './summaryStore'
+import {
+  highWaterMarks,
+  threadCoverage,
+  summaryQueue,
+  dirtyThreads,
+  advanceMarks,
+  enqueue,
+  drainQueue,
+  loadSummaryForConv,
+  coveredCount,
+  threadSummary,
+} from './summaryStore'
 import { summaryKey } from './keys'
 import { threads } from './threads'
 import type { Thread } from './threads'
@@ -38,6 +49,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   threads.value = []
   highWaterMarks.value = {}
+  threadCoverage.value = {}
   summaryQueue.value = []
 })
 
@@ -65,8 +77,34 @@ describe('advanceMarks', () => {
     threads.value = [makeThread('a', 3, true), makeThread('b', 1, false)]
     advanceMarks()
     expect(highWaterMarks.value['a']).toBe(3)
+    expect(threadCoverage.value['a'].highWaterMark).toBe(3)
     expect(highWaterMarks.value['b']).toBeUndefined()
     expect(chrome.storage.local.set).toHaveBeenCalled()
+  })
+
+  it('stores summaries with their covered message count', () => {
+    threads.value = [makeThread('a', 3, true)]
+    advanceMarks({ a: 'summary a' })
+    expect(threadCoverage.value['a']).toEqual({
+      highWaterMark: 3,
+      summary: 'summary a',
+      summaryUpdatedAt: expect.any(Number),
+    })
+    expect(coveredCount('a')).toBe(3)
+    expect(threadSummary('a')).toBe('summary a')
+  })
+
+  it('preserves an existing summary when advancing without a replacement', () => {
+    threadCoverage.value = {
+      a: { highWaterMark: 2, summary: 'old summary', summaryUpdatedAt: 123 },
+    }
+    threads.value = [makeThread('a', 4, true)]
+    advanceMarks()
+    expect(threadCoverage.value['a']).toEqual({
+      highWaterMark: 4,
+      summary: 'old summary',
+      summaryUpdatedAt: 123,
+    })
   })
 })
 
@@ -87,19 +125,37 @@ describe('loadSummaryForConv', () => {
     vi.mocked(chrome.storage.local.get).mockResolvedValueOnce({})
     await loadSummaryForConv()
     expect(highWaterMarks.value).toEqual({})
+    expect(threadCoverage.value).toEqual({})
     expect(summaryQueue.value).toEqual([])
   })
 
-  it('populates signals from stored data', async () => {
+  it('populates signals from stored coverage data', async () => {
     const key = summaryKey()
     vi.mocked(chrome.storage.local.get).mockResolvedValueOnce({
       [key]: {
-        highWaterMarks: { a: 2 },
+        threadCoverage: {
+          a: { highWaterMark: 2, summary: 'summary a', summaryUpdatedAt: 1 },
+        },
         summaryQueue: [{ text: 'x', coveredTurnCounts: {}, generatedAt: 0 }],
       },
     })
     await loadSummaryForConv()
     expect(highWaterMarks.value).toEqual({ a: 2 })
+    expect(threadCoverage.value).toEqual({
+      a: { highWaterMark: 2, summary: 'summary a', summaryUpdatedAt: 1 },
+    })
     expect(summaryQueue.value).toEqual([{ text: 'x', coveredTurnCounts: {}, generatedAt: 0 }])
+  })
+
+  it('migrates legacy high-water marks into coverage records', async () => {
+    const key = summaryKey()
+    vi.mocked(chrome.storage.local.get).mockResolvedValueOnce({
+      [key]: {
+        highWaterMarks: { a: 2 },
+      },
+    })
+    await loadSummaryForConv()
+    expect(threadCoverage.value).toEqual({ a: { highWaterMark: 2 } })
+    expect(highWaterMarks.value).toEqual({ a: 2 })
   })
 })
