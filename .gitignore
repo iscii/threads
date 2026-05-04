@@ -1,4 +1,11 @@
 node_modules
 dist
+dist.zip
 release
 .worktrees
+
+*.png
+!public/icon.png
+!public/icon-*.png
+playwright-*
+.playwright-mcp/
