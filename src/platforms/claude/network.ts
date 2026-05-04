@@ -1,10 +1,12 @@
 import type { EndpointShape, EndpointVars, NetworkAdapter } from '@/types'
 import { THR_CONTEXT_TAG, THR_CONTEXT_STRIP_RE } from '@/messaging'
 import { CLAUDE_MSG } from './messaging'
+import { createDebugLogger } from '@/debug'
 
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001'
 const COMPLETION_TEMPLATE =
   '/api/organizations/{organizationUuid}/chat_conversations/{conversationUuid}/completion'
+const debug = createDebugLogger('platform')
 
 interface PromptBody {
   prompt: string
@@ -45,7 +47,10 @@ export const claudeAdapter: NetworkAdapter = {
   },
 
   inject(body: unknown, summaries: string[]): { body: unknown; injected: boolean } {
-    if (!isPromptBody(body)) return { body, injected: false }
+    if (!isPromptBody(body)) {
+      debug.warn('claude injection skipped unsupported body', () => ({ body: describeValue(body) }))
+      return { body, injected: false }
+    }
 
     const prefix = `<${THR_CONTEXT_TAG}>\n${summaries.join('\n')}\n</${THR_CONTEXT_TAG}>\n\n`
     return {
@@ -64,7 +69,12 @@ export const claudeAdapter: NetworkAdapter = {
   },
 
   buildCompletion(capturedBody: unknown, prompt: string, model?: string): unknown {
-    if (!isPromptBody(capturedBody)) return capturedBody
+    if (!isPromptBody(capturedBody)) {
+      debug.warn('claude completion build skipped unsupported body', () => ({
+        body: describeValue(capturedBody),
+      }))
+      return capturedBody
+    }
     return {
       ...capturedBody,
       prompt,
@@ -77,7 +87,15 @@ export const claudeAdapter: NetworkAdapter = {
   },
 
   captureCompletion(url: string, body: unknown): EndpointShape | null {
-    if (!isPromptBody(body) || !parseCompletionURL(url)) return null
+    const ids = parseCompletionURL(url)
+    if (!isPromptBody(body) || !ids) {
+      return null
+    }
+    debug.log('claude completion shape captured', () => ({
+      hasOrganizationUuid: Boolean(ids.organizationUuid),
+      hasConversationUuid: Boolean(ids.conversationUuid),
+      body: describeValue(body),
+    }))
     return {
       url: COMPLETION_TEMPLATE,
       body: sanitizePromptBody(body),
@@ -86,12 +104,19 @@ export const claudeAdapter: NetworkAdapter = {
 
   captureEndpointVars(url: string, body: unknown): EndpointVars | null {
     const ids = parseCompletionURL(url) ?? parseConversationURL(url)
-    if (!ids) return null
+    if (!ids) {
+      return null
+    }
 
     const parentMessageUuid = isPromptBody(body)
       ? stringValue(body.parent_message_uuid)
       : latestMessageUuid(body)
 
+    debug.log('claude endpoint vars captured', () => ({
+      hasOrganizationUuid: Boolean(ids.organizationUuid),
+      hasConversationUuid: Boolean(ids.conversationUuid),
+      hasParentMessageUuid: Boolean(parentMessageUuid),
+    }))
     return {
       ...ids,
       ...(parentMessageUuid ? { parentMessageUuid } : {}),
@@ -99,7 +124,12 @@ export const claudeAdapter: NetworkAdapter = {
   },
 
   buildEndpoint(shape: EndpointShape, vars: EndpointVars): EndpointShape | null {
-    if (!isPromptBody(shape.body)) return null
+    if (!isPromptBody(shape.body)) {
+      debug.warn('claude endpoint build skipped unsupported shape body', () => ({
+        body: describeValue(shape.body),
+      }))
+      return null
+    }
     return {
       url: shape.url
         .replace('{organizationUuid}', vars.organizationUuid)
@@ -116,7 +146,10 @@ export const claudeAdapter: NetworkAdapter = {
     urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
 
     filter(body: unknown): unknown {
-      if (!isConversationBody(body)) return body
+      if (!isConversationBody(body)) {
+        debug.log('claude history filter skipped unsupported body', () => ({ body: describeValue(body) }))
+        return body
+      }
       return {
         ...body,
         chat_messages: body.chat_messages.map(msg => {
@@ -213,4 +246,13 @@ function isConversationBody(body: unknown): body is ConversationBody {
     body !== null &&
     Array.isArray((body as ConversationBody).chat_messages)
   )
+}
+
+function describeValue(value: unknown): unknown {
+  if (value === null) return { type: 'null' }
+  if (Array.isArray(value)) return { type: 'array', length: value.length }
+  if (typeof value === 'object') {
+    return { type: 'object', keys: Object.keys(value as Record<string, unknown>) }
+  }
+  return { type: typeof value }
 }

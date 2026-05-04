@@ -1,5 +1,8 @@
 import type { DOMLayerCallbacks, DOMLayerAPI, BlockDescriptor } from './types'
 import { hashText } from './hash'
+import { createDebugLogger } from '@/debug'
+
+const debug = createDebugLogger('dom')
 
 const TRIGGER_SVG = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 1.5h6a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5H4.5L2 11V3a1.5 1.5 0 0 1 1.5-1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/></svg>`
 const ZONE_WIDTH = 308
@@ -71,6 +74,11 @@ export function createInjector(
   function rebindBlock(id: string): BlockEntry | null {
     const root = findScrollContainer() ?? document.body
     const candidates = Array.from(root.querySelectorAll<HTMLElement>('p, li, pre, blockquote'))
+    debug.warn('rebind started for stale anchor', () => ({
+      id,
+      candidateCount: candidates.length,
+      root: describeElement(root),
+    }))
     for (const candidate of candidates) {
       if (!isUsableAnchor(candidate)) continue
       const text = (candidate.textContent ?? '').trim()
@@ -79,8 +87,10 @@ export function createInjector(
       const old = blocks.get(id)
       if (old && old.blockEl !== candidate) detachBlock(old.blockEl)
       attachBlock(id, candidate, old?.state)
+      debug.log('rebind succeeded', () => ({ id, anchor: describeAnchor(candidate) }))
       return blocks.get(id) ?? null
     }
+    debug.warn('rebind failed', () => ({ id }))
     return null
   }
 
@@ -109,6 +119,10 @@ export function createInjector(
 
     host.dataset.thrOverlay = 'true'
     host.style.left = `${Math.max(MIN_VIEWPORT_PADDING, window.innerWidth - ZONE_WIDTH - MIN_VIEWPORT_PADDING)}px`
+    debug.warn('zone left updated without chat container', () => ({
+      viewportWidth: window.innerWidth,
+      left: host.style.left,
+    }))
   }
 
   function instrumentBlocks(descs: BlockDescriptor[]): void {
@@ -117,12 +131,19 @@ export function createInjector(
       const existing = blocks.get(desc.id)
       if (existing) {
         if (isUsableAnchor(existing.blockEl)) continue
+        debug.warn('instrument replacing unusable anchor', () => ({
+          id: desc.id,
+          anchor: describeAnchor(existing.blockEl),
+        }))
         detachBlock(existing.blockEl)
         blocks.delete(desc.id)
       }
 
       const p = desc.element as HTMLElement
-      if (!p.parentNode) continue
+      if (!p.parentNode) {
+        debug.warn('instrument skipped detached descriptor', () => ({ id: desc.id }))
+        continue
+      }
 
       // Apply data-thr-id directly to the block element — no reparenting,
       // so React's parent.removeChild(p) continues to work on resize.
@@ -147,6 +168,11 @@ export function createInjector(
       if (header) resizeObserver.observe(header)
       const chatContainer = findChatContainer()
       if (chatContainer) resizeObserver.observe(chatContainer)
+      debug.log('position observers attached', () => ({
+        scrollContainer: scrollContainer ? describeElement(scrollContainer) : null,
+        header: header ? describeElement(header) : null,
+        chatContainer: chatContainer ? describeElement(chatContainer) : null,
+      }))
     }
   }
 
@@ -162,6 +188,8 @@ export function createInjector(
       if (entry) {
         entry.state = state
         entry.blockEl.dataset.thrState = state
+      } else {
+        debug.warn('block state skipped missing anchor', () => ({ id, state }))
       }
     },
 
@@ -172,7 +200,9 @@ export function createInjector(
         : rebindBlock(id)
       if (!entry) return 0
       const hostTop = parseFloat(host.style.top) || 0
-      return entry.blockEl.getBoundingClientRect().top - hostTop
+      const rect = entry.blockEl.getBoundingClientRect()
+      const top = rect.top - hostTop
+      return top
     },
 
     destroy() {
@@ -185,11 +215,39 @@ export function createInjector(
       }
       blocks.clear()
       host.remove()
+      debug.log('injector destroyed')
     },
   }
 
   function updatePosition(): void {
     updateZoneTop()
     updateZoneLeft()
+  }
+}
+
+function describeAnchor(el: HTMLElement, rect = el.getBoundingClientRect()): Record<string, unknown> {
+  return {
+    tag: el.tagName,
+    connected: el.isConnected,
+    rects: el.getClientRects().length,
+    rect: describeRect(rect),
+  }
+}
+
+function describeElement(el: Element): Record<string, unknown> {
+  return {
+    tag: el.tagName,
+    className: el.getAttribute('class'),
+  }
+}
+
+function describeRect(rect: DOMRect): Record<string, number> {
+  return {
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+    left: rect.left,
+    width: rect.width,
+    height: rect.height,
   }
 }

@@ -52,7 +52,9 @@ export function ThreadPanel({ thread, top }: ThreadPanelProps) {
             class={`tp-btn${thread.included ? ' on' : ''}`}
             title={thread.included ? 'Exclude from summary' : 'Include in summary'}
             aria-label={thread.included ? 'Exclude from summary' : 'Include in summary'}
-            onClick={() => setIncluded(thread.id, !thread.included)}
+            onClick={() => {
+              setIncluded(thread.id, !thread.included)
+            }}
           >
             <BookmarkIcon />
           </button>
@@ -60,7 +62,9 @@ export function ThreadPanel({ thread, top }: ThreadPanelProps) {
             class="tp-btn tp-close"
             title="Close thread"
             aria-label="Close thread"
-            onClick={() => closeThread(thread.id)}
+            onClick={() => {
+              closeThread(thread.id)
+            }}
           >
             <CloseIcon />
           </button>

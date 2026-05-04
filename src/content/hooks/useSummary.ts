@@ -11,13 +11,17 @@ import {
 } from '../lib/summaryStore'
 import { accumulateSSE } from '../lib/accumulateSSE'
 import { sameOriginURL } from '../lib/endpoint'
+import { createDebugLogger } from '@/debug'
 
 let _networkAdapter: NetworkAdapter | null = null
+const debug = createDebugLogger('summary')
 
 export function initSummary(networkAdapter: NetworkAdapter): void {
   _networkAdapter = networkAdapter
+  debug.log('summary initialized')
   // syncronous custom window event for summary queue draining in fetch watcher
   window.addEventListener('drainSummaries', () => {
+    debug.log('drain summaries event received')
     drainQueue()
   })
 }
@@ -55,7 +59,13 @@ function buildSummarizationPrompt(dirty: Thread[]): string {
 function parseThreadSummaries(text: string, dirty: Thread[]): Record<string, string> | null {
   const start = text.indexOf('{')
   const end = text.lastIndexOf('}')
-  if (start === -1 || end === -1 || end < start) return null
+  if (start === -1 || end === -1 || end < start) {
+    debug.warn('summary parse skipped missing json object', () => ({
+      responseLength: text.length,
+      dirtyCount: dirty.length,
+    }))
+    return null
+  }
 
   try {
     const parsed = JSON.parse(text.slice(start, end + 1)) as unknown
@@ -64,11 +74,21 @@ function parseThreadSummaries(text: string, dirty: Thread[]): Record<string, str
     const summaries: Record<string, string> = {}
     for (const t of dirty) {
       const summary = record[t.blockId]
-      if (typeof summary !== 'string' || summary.trim().length === 0) return null
+      if (typeof summary !== 'string' || summary.trim().length === 0) {
+        debug.warn('summary parse skipped missing thread summary', () => ({
+          blockId: t.blockId,
+          dirtyCount: dirty.length,
+        }))
+        return null
+      }
       summaries[t.blockId] = summary.trim()
     }
     return summaries
   } catch {
+    debug.warn('summary parse failed', () => ({
+      responseLength: text.length,
+      dirtyCount: dirty.length,
+    }))
     return null
   }
 }
@@ -76,10 +96,19 @@ function parseThreadSummaries(text: string, dirty: Thread[]): Record<string, str
 export async function triggerSummarization(): Promise<void> {
   const na = _networkAdapter
   const info = endpointInfo.value
-  if (!na || !info) return
+  if (!na || !info) {
+    debug.warn('summarization skipped missing endpoint', () => ({
+      hasAdapter: Boolean(na),
+      hasEndpoint: Boolean(info),
+    }))
+    return
+  }
 
   const endpointURL = sameOriginURL(info.url)
-  if (!endpointURL) return
+  if (!endpointURL) {
+    debug.warn('summarization skipped non same-origin endpoint')
+    return
+  }
 
   const dirty = dirtyThreads()
   if (dirty.length === 0) return
@@ -88,6 +117,11 @@ export async function triggerSummarization(): Promise<void> {
   const body = na.buildCompletion(info.body, prompt, 'claude-haiku-4-5-20251001')
 
   summaryStatus.value = 'summarizing'
+  debug.log('summarization started', () => ({
+    dirtyCount: dirty.length,
+    persistedEndpoint: Boolean(info.persisted),
+    requestBody: describeValue(body),
+  }))
 
   try {
     const res = await fetch(endpointURL, {
@@ -99,9 +133,16 @@ export async function triggerSummarization(): Promise<void> {
       },
       body: JSON.stringify(body),
     })
+    debug.log('summarization response received', () => ({ status: res.status, ok: res.ok }))
     const text = await accumulateSSE(res)
     const summaries = parseThreadSummaries(text, dirty)
-    if (!summaries) return
+    if (!summaries) {
+      debug.warn('summarization skipped queue due to parse failure', () => ({
+        dirtyCount: dirty.length,
+        responseLength: text.length,
+      }))
+      return
+    }
 
     const queueText = Object.values(summaries).join('\n')
     enqueue({
@@ -111,9 +152,24 @@ export async function triggerSummarization(): Promise<void> {
     })
     advanceMarks(summaries, dirty)
     window.dispatchEvent(new CustomEvent('summaryEnqueued', { detail: { text: queueText } }))
+    debug.log('summarization enqueued', () => ({
+      summaryCount: Object.keys(summaries).length,
+      queueTextLength: queueText.length,
+    }))
   } catch {
+    debug.warn('summarization request failed', () => ({ dirtyCount: dirty.length }))
     // swallow — dirty threads remain for next attempt
   } finally {
     summaryStatus.value = 'idle'
+    debug.log('summarization finished')
   }
+}
+
+function describeValue(value: unknown): unknown {
+  if (value === null) return { type: 'null' }
+  if (Array.isArray(value)) return { type: 'array', length: value.length }
+  if (typeof value === 'object') {
+    return { type: 'object', keys: Object.keys(value as Record<string, unknown>) }
+  }
+  return { type: typeof value }
 }

@@ -1,6 +1,9 @@
 import type { DOMAdapter } from '@/types'
 import type { DOMLayerCallbacks, BlockDescriptor } from './types'
 import { hashText } from './hash'
+import { createDebugLogger } from '@/debug'
+
+const debug = createDebugLogger('dom')
 
 export function createObserver(
   adapter: DOMAdapter,
@@ -35,7 +38,10 @@ export function createObserver(
     if (instrumented.has(turn)) return
     if (!adapter.isStreamingComplete(turn)) return
     const blocks = adapter.findBlocks(turn)
-    if (blocks.length === 0) return
+    if (blocks.length === 0) {
+      debug.warn('turn skipped no blocks found', () => describeElement(turn))
+      return
+    }
     instrumented.add(turn)
     callbacks.onBlocksFound(blocks.map(toDescriptor))
   }
@@ -43,9 +49,17 @@ export function createObserver(
   function initTier2(): void {
     tier2?.disconnect()
     const scrollContainer = adapter.findScrollContainer()
-    if (!scrollContainer) return
+    if (!scrollContainer) {
+      debug.warn('observer init skipped missing scroll container')
+      return
+    }
 
-    for (const turn of adapter.findAssistantTurns(scrollContainer)) {
+    const initialTurns = adapter.findAssistantTurns(scrollContainer)
+    debug.log('observer init', () => ({
+      scrollContainer: describeElement(scrollContainer),
+      initialTurnCount: initialTurns.length,
+    }))
+    for (const turn of initialTurns) {
       instrumentTurn(turn)
     }
 
@@ -80,6 +94,7 @@ export function createObserver(
   }
 
   function handleNavigation(): void {
+    debug.log('navigation observed')
     tier2?.disconnect()
     tier2 = null
     instrumented = new WeakSet<Element>()
@@ -89,6 +104,7 @@ export function createObserver(
 
   function start(): void {
     stopNavigation = listenNavigation(handleNavigation)
+    debug.log('observer started')
     initTier2()
   }
 
@@ -97,7 +113,16 @@ export function createObserver(
     stopNavigation = undefined
     tier2?.disconnect()
     tier2 = null
+    debug.log('observer stopped')
   }
 
   return { start, handleNavigation, stop }
+}
+
+function describeElement(el: Element): Record<string, unknown> {
+  return {
+    tag: el.tagName,
+    className: el.getAttribute('class'),
+    streaming: el.getAttribute('data-is-streaming'),
+  }
 }

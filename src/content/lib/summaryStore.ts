@@ -1,6 +1,9 @@
 import { signal } from '@preact/signals'
 import { threads, type Thread } from './threads'
 import { summaryKey } from './keys'
+import { createDebugLogger } from '@/debug'
+
+const debug = createDebugLogger('summary')
 
 export type SummaryItem = {
   text: string
@@ -18,6 +21,10 @@ export const threadCoverage = signal<Record<string, ThreadCoverage>>({})
 export const summaryQueue = signal<SummaryItem[]>([])
 
 function persistSummaryData(): void {
+  debug.log('persisting summary data', () => ({
+    coverageCount: Object.keys(threadCoverage.value).length,
+    queueLength: summaryQueue.value.length,
+  }))
   chrome.storage.local.set({
     [summaryKey()]: {
       threadCoverage: threadCoverage.value,
@@ -54,6 +61,10 @@ export function advanceMarks(
     }
   }
   threadCoverage.value = { ...threadCoverage.value, ...updates }
+  debug.log('coverage advanced', () => ({
+    threadCount: coveredThreads.length,
+    summaryCount: Object.keys(summaries).length,
+  }))
   persistSummaryData()
 }
 
@@ -63,12 +74,17 @@ export function threadSummary(blockId: string): string | undefined {
 
 export function enqueue(item: SummaryItem): void {
   summaryQueue.value = [...summaryQueue.value, item]
+  debug.log('summary enqueued', () => ({
+    queueLength: summaryQueue.value.length,
+    coveredThreadCount: Object.keys(item.coveredTurnCounts).length,
+  }))
   persistSummaryData()
 }
 
 export function drainQueue(): SummaryItem[] {
   const items = summaryQueue.value
   summaryQueue.value = []
+  debug.log('summary queue drained', () => ({ count: items.length }))
   persistSummaryData()
   return items
 }
@@ -87,6 +103,10 @@ export async function loadSummaryForConv(): Promise<void> {
     ? data.threadCoverage as Record<string, ThreadCoverage>
     : {}
   summaryQueue.value = Array.isArray(data?.summaryQueue) ? data.summaryQueue as SummaryItem[] : []
+  debug.log('loaded summary data', () => ({
+    coverageCount: Object.keys(threadCoverage.value).length,
+    queueLength: summaryQueue.value.length,
+  }))
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
