@@ -10,7 +10,10 @@ function makeDescriptor(p: HTMLParagraphElement, id = 'abc12345') {
   return { id, element: p, text: p.textContent ?? '' }
 }
 
-afterEach(() => { document.body.innerHTML = '' })
+afterEach(() => {
+  vi.restoreAllMocks()
+  document.body.innerHTML = ''
+})
 
 describe('thread zone host', () => {
   it('appends a host element to document.body on creation', () => {
@@ -37,6 +40,54 @@ describe('thread zone host', () => {
     const injector = createInjector({ onBlockTriggerClicked: vi.fn() })
     const host = document.body.querySelector('[data-thr-zone]')!
     expect(injector.getShadowRoot()).toBe(host.shadowRoot)
+  })
+
+  it('places the thread panel just to the right of the chat when space allows', () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1200)
+    const chat = document.createElement('div')
+    vi.spyOn(chat, 'getBoundingClientRect').mockReturnValue({
+      left: 100,
+      right: 700,
+      top: 0,
+      bottom: 500,
+      width: 600,
+      height: 500,
+      x: 100,
+      y: 0,
+      toJSON: () => ({}),
+    })
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() }, () => null, () => null, () => chat)
+    const p = makeBlock()
+    document.body.appendChild(p)
+
+    injector.instrumentBlocks([makeDescriptor(p)])
+
+    const host = document.body.querySelector<HTMLElement>('[data-thr-zone]')!
+    expect(host.style.left).toBe('696px')
+  })
+
+  it('overlays the thread panel inside the chat when the viewport is narrow', () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(760)
+    const chat = document.createElement('div')
+    vi.spyOn(chat, 'getBoundingClientRect').mockReturnValue({
+      left: 100,
+      right: 700,
+      top: 0,
+      bottom: 500,
+      width: 600,
+      height: 500,
+      x: 100,
+      y: 0,
+      toJSON: () => ({}),
+    })
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() }, () => null, () => null, () => chat)
+    const p = makeBlock()
+    document.body.appendChild(p)
+
+    injector.instrumentBlocks([makeDescriptor(p)])
+
+    const host = document.body.querySelector<HTMLElement>('[data-thr-zone]')!
+    expect(host.style.left).toBe('396px')
   })
 })
 

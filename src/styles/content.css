@@ -17,6 +17,7 @@
   background: var(--bg2);
   border: 1px solid var(--border2);
   border-radius: var(--radius-panel);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.28);
   pointer-events: all;
   animation: tp-mount 0.17s ease forwards;
   display: flex;
@@ -51,6 +52,7 @@
 
 .tp[data-active=true] {
   border-color: var(--aborder);
+  box-shadow: 0 14px 34px rgba(0,0,0,0.36), 0 0 0 1px rgba(201,138,82,0.12);
   z-index: 10;
 }
 

@@ -1,6 +1,10 @@
 import type { DOMLayerCallbacks, DOMLayerAPI, BlockDescriptor } from './types'
 
 const TRIGGER_SVG = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 1.5h6a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5H4.5L2 11V3a1.5 1.5 0 0 1 1.5-1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/></svg>`
+const ZONE_WIDTH = 308
+const PANEL_LEFT = 12
+const PANEL_WIDTH = 284
+const PANEL_GAP = 8
 
 interface BlockEntry {
   blockEl: HTMLElement
@@ -18,7 +22,7 @@ export function createInjector(
     position: 'fixed',
     top: '0',
     bottom: '0',
-    width: '308px',
+    width: `${ZONE_WIDTH}px`,
     pointerEvents: 'none',
     zIndex: '2147483600',
     overflow: 'hidden',
@@ -38,7 +42,11 @@ export function createInjector(
   function updateZoneLeft(): void {
     const container = findChatContainer() ?? findScrollContainer()
     if (container) {
-      host.style.left = `${container.getBoundingClientRect().right + 8}px`
+      const rect = container.getBoundingClientRect()
+      const normalLeft = rect.right + PANEL_GAP - PANEL_LEFT
+      const panelWouldOverflow = normalLeft + PANEL_LEFT + PANEL_WIDTH > window.innerWidth
+      const overlayLeft = rect.right - PANEL_WIDTH - PANEL_GAP - PANEL_LEFT
+      host.style.left = `${Math.max(0, panelWouldOverflow ? overlayLeft : normalLeft)}px`
     }
   }
 
@@ -75,6 +83,7 @@ export function createInjector(
     updateZoneLeft()
 
     if (!resizeObserver) {
+      window.addEventListener('resize', updatePosition)
       resizeObserver = new ResizeObserver(() => { updateZoneTop(); updateZoneLeft() })
       const scrollContainer = findScrollContainer()
       if (scrollContainer) resizeObserver.observe(scrollContainer)
@@ -102,6 +111,7 @@ export function createInjector(
     },
 
     destroy() {
+      window.removeEventListener('resize', updatePosition)
       resizeObserver?.disconnect()
       resizeObserver = null
       for (const entry of blocks.values()) {
@@ -112,5 +122,10 @@ export function createInjector(
       blocks.clear()
       host.remove()
     },
+  }
+
+  function updatePosition(): void {
+    updateZoneTop()
+    updateZoneLeft()
   }
 }
