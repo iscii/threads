@@ -1,4 +1,5 @@
 import type { DOMLayerCallbacks, DOMLayerAPI, BlockDescriptor } from './types'
+import { hashText } from './hash'
 
 const TRIGGER_SVG = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 1.5h6a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5H4.5L2 11V3a1.5 1.5 0 0 1 1.5-1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/></svg>`
 const ZONE_WIDTH = 308
@@ -9,6 +10,7 @@ const MIN_VIEWPORT_PADDING = 8
 
 interface BlockEntry {
   blockEl: HTMLElement
+  state?: 'idle' | 'has-thread' | 'active'
 }
 
 export function createInjector(
@@ -34,6 +36,53 @@ export function createInjector(
 
   const blocks = new Map<string, BlockEntry>()
   let resizeObserver: ResizeObserver | null = null
+
+  function isUsableAnchor(el: HTMLElement): boolean {
+    if (!el.isConnected) return false
+    if (el.getClientRects().length > 0) return true
+    const rect = el.getBoundingClientRect()
+    return rect.width > 0 || rect.height > 0
+  }
+
+  function attachBlock(id: string, blockEl: HTMLElement, state?: BlockEntry['state']): void {
+    blockEl.dataset.thrId = id
+
+    if (!blockEl.querySelector('[data-thr-trigger]')) {
+      const btn = document.createElement('button')
+      btn.dataset.thrTrigger = ''
+      btn.innerHTML = TRIGGER_SVG
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        callbacks.onBlockTriggerClicked(id)
+      })
+      blockEl.appendChild(btn)
+    }
+
+    if (state) blockEl.dataset.thrState = state
+    blocks.set(id, { blockEl, state })
+  }
+
+  function detachBlock(blockEl: HTMLElement): void {
+    delete blockEl.dataset.thrId
+    delete blockEl.dataset.thrState
+    blockEl.querySelectorAll('[data-thr-trigger]').forEach(b => b.remove())
+  }
+
+  function rebindBlock(id: string): BlockEntry | null {
+    const root = findScrollContainer() ?? document.body
+    const candidates = Array.from(root.querySelectorAll<HTMLElement>('p, li, pre, blockquote'))
+    for (const candidate of candidates) {
+      if (!isUsableAnchor(candidate)) continue
+      const text = (candidate.textContent ?? '').trim()
+      if (!text || hashText(text) !== id) continue
+
+      const old = blocks.get(id)
+      if (old && old.blockEl !== candidate) detachBlock(old.blockEl)
+      attachBlock(id, candidate, old?.state)
+      return blocks.get(id) ?? null
+    }
+    return null
+  }
 
   function updateZoneTop(): void {
     const headerBottom = findHeader()?.getBoundingClientRect().bottom ?? 0
@@ -65,25 +114,19 @@ export function createInjector(
   function instrumentBlocks(descs: BlockDescriptor[]): void {
     let instrumented = 0
     for (const desc of descs) {
-      if (blocks.has(desc.id)) continue
+      const existing = blocks.get(desc.id)
+      if (existing) {
+        if (isUsableAnchor(existing.blockEl)) continue
+        detachBlock(existing.blockEl)
+        blocks.delete(desc.id)
+      }
 
       const p = desc.element as HTMLElement
       if (!p.parentNode) continue
 
       // Apply data-thr-id directly to the block element — no reparenting,
       // so React's parent.removeChild(p) continues to work on resize.
-      p.dataset.thrId = desc.id
-
-      const btn = document.createElement('button')
-      btn.dataset.thrTrigger = ''
-      btn.innerHTML = TRIGGER_SVG
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation()
-        callbacks.onBlockTriggerClicked(desc.id)
-      })
-      p.appendChild(btn)
-
-      blocks.set(desc.id, { blockEl: p })
+      attachBlock(desc.id, p, existing?.state)
       instrumented++
     }
 
@@ -112,12 +155,21 @@ export function createInjector(
     getShadowRoot: () => shadow,
 
     setBlockState(id, state) {
-      const entry = blocks.get(id)
-      if (entry) entry.blockEl.dataset.thrState = state
+      const current = blocks.get(id)
+      const entry = current && isUsableAnchor(current.blockEl)
+        ? current
+        : rebindBlock(id)
+      if (entry) {
+        entry.state = state
+        entry.blockEl.dataset.thrState = state
+      }
     },
 
     getBlockTop(id) {
-      const entry = blocks.get(id)
+      const current = blocks.get(id)
+      const entry = current && isUsableAnchor(current.blockEl)
+        ? current
+        : rebindBlock(id)
       if (!entry) return 0
       const hostTop = parseFloat(host.style.top) || 0
       return entry.blockEl.getBoundingClientRect().top - hostTop
@@ -129,9 +181,7 @@ export function createInjector(
       resizeObserver?.disconnect()
       resizeObserver = null
       for (const entry of blocks.values()) {
-        delete entry.blockEl.dataset.thrId
-        delete entry.blockEl.dataset.thrState
-        entry.blockEl.querySelectorAll('[data-thr-trigger]').forEach(b => b.remove())
+        detachBlock(entry.blockEl)
       }
       blocks.clear()
       host.remove()
