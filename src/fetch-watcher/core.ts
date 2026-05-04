@@ -30,9 +30,14 @@ export function createFetchWatcher(
     ).toUpperCase()
 
     if (method === 'GET' && adapter.history?.urlPattern.test(url)) {
+      const headers = requestHeaders(input, init)
       const response = await originalFetch(input, init)
       if (!response.ok) return response
       const json = await response.json()
+      window.postMessage(
+        { type: adapter.messages.endpointCaptured, url, body: json, headers },
+        location.origin,
+      )
       return new Response(JSON.stringify(adapter.history.filter(json)), {
         status: response.status,
         statusText: response.statusText,
@@ -45,15 +50,21 @@ export function createFetchWatcher(
     }
 
     let body: unknown = null
+    const rawBody = await requestBodyText(input, init)
     try {
-      body = JSON.parse(init.body as string)
+      body = rawBody ? JSON.parse(rawBody) : null
     } catch {
       // Non-JSON body: adapter.inject only understands structured bodies, so skip
       // injection and keep staged summaries for the next request.
     }
 
     window.postMessage(
-      { type: adapter.messages.endpointCaptured, url, body },
+      {
+        type: adapter.messages.endpointCaptured,
+        url,
+        body,
+        headers: requestHeaders(input, init),
+      },
       location.origin,
     )
 
@@ -112,4 +123,44 @@ export function createFetchWatcher(
   }
 
   return { interceptFetch, handleMessage }
+}
+
+async function requestBodyText(
+  input: RequestInfo | URL,
+  init: RequestInit,
+): Promise<string | null> {
+  if (typeof init.body === 'string') return init.body
+  if (input instanceof Request) {
+    try {
+      return await input.clone().text()
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function requestHeaders(
+  input: RequestInfo | URL,
+  init: RequestInit,
+): Record<string, string> | undefined {
+  const headers = new Headers(input instanceof Request ? input.headers : undefined)
+  if (init.headers) {
+    new Headers(init.headers).forEach((value, key) => headers.set(key, value))
+  }
+
+  const record: Record<string, string> = {}
+  headers.forEach((value, key) => {
+    if (isStorableHeader(key)) record[key] = value
+  })
+  return Object.keys(record).length ? record : undefined
+}
+
+function isStorableHeader(key: string): boolean {
+  return ![
+    'authorization',
+    'content-length',
+    'cookie',
+    'host',
+  ].includes(key.toLowerCase())
 }

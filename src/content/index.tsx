@@ -1,5 +1,10 @@
 import { render } from 'preact'
-import { endpointInfo } from './lib/threads'
+import {
+  initEndpointInfo,
+  setEndpointShape,
+  setEndpointVars,
+  updateEndpointHeaders,
+} from './lib/threads'
 import { createCoordinator } from './lib/adapter'
 import { initQueue } from './hooks/useQueue'
 import { initSummary } from './hooks/useSummary'
@@ -15,14 +20,29 @@ const platforms: Record<string, Platform> = {
 
 const platform = platforms[location.hostname]
 if (platform) {
+  initEndpointInfo(platform.networkAdapter)
   initQueue(platform.networkAdapter)
   initSummary(platform.networkAdapter)
 
   window.addEventListener('message', (e: MessageEvent) => {
     if (e.source !== window) return
-    const d = e.data as { type?: string; url?: string; body?: unknown }
+    const d = e.data as {
+      type?: string
+      url?: string
+      body?: unknown
+      headers?: Record<string, string>
+    }
     if (d?.type === platform.networkAdapter.messages.endpointCaptured) {
-      endpointInfo.value = { url: d.url!, body: d.body }
+      if (d.headers) {
+        updateEndpointHeaders(d.headers)
+      }
+      if (!d.url) return
+
+      const shape = platform.networkAdapter.captureCompletion?.(d.url, d.body)
+      if (shape) setEndpointShape(shape)
+
+      const vars = platform.networkAdapter.captureEndpointVars?.(d.url, d.body)
+      if (vars) setEndpointVars(vars)
     }
   })
 

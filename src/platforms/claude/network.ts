@@ -1,6 +1,10 @@
-import type { NetworkAdapter } from '@/types'
+import type { EndpointShape, EndpointVars, NetworkAdapter } from '@/types'
 import { THR_CONTEXT_TAG, THR_CONTEXT_STRIP_RE } from '@/messaging'
 import { CLAUDE_MSG } from './messaging'
+
+const HAIKU_MODEL = 'claude-haiku-4-5-20251001'
+const COMPLETION_TEMPLATE =
+  '/api/organizations/{organizationUuid}/chat_conversations/{conversationUuid}/completion'
 
 interface PromptBody {
   prompt: string
@@ -72,6 +76,42 @@ export const claudeAdapter: NetworkAdapter = {
     }
   },
 
+  captureCompletion(url: string, body: unknown): EndpointShape | null {
+    if (!isPromptBody(body) || !parseCompletionURL(url)) return null
+    return {
+      url: COMPLETION_TEMPLATE,
+      body: sanitizePromptBody(body),
+    }
+  },
+
+  captureEndpointVars(url: string, body: unknown): EndpointVars | null {
+    const ids = parseCompletionURL(url) ?? parseConversationURL(url)
+    if (!ids) return null
+
+    const parentMessageUuid = isPromptBody(body)
+      ? stringValue(body.parent_message_uuid)
+      : latestMessageUuid(body)
+
+    return {
+      ...ids,
+      ...(parentMessageUuid ? { parentMessageUuid } : {}),
+    }
+  },
+
+  buildEndpoint(shape: EndpointShape, vars: EndpointVars): EndpointShape | null {
+    if (!isPromptBody(shape.body)) return null
+    return {
+      url: shape.url
+        .replace('{organizationUuid}', vars.organizationUuid)
+        .replace('{conversationUuid}', vars.conversationUuid),
+      body: {
+        ...shape.body,
+        model: HAIKU_MODEL,
+        ...(vars.parentMessageUuid ? { parent_message_uuid: vars.parentMessageUuid } : {}),
+      },
+    }
+  },
+
   history: {
     urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
 
@@ -93,6 +133,70 @@ export const claudeAdapter: NetworkAdapter = {
       }
     },
   },
+}
+
+function sanitizePromptBody(body: PromptBody): PromptBody {
+  const sanitized: PromptBody = {
+    prompt: '',
+    attachments: arrayValue(body.attachments),
+    files: arrayValue(body.files),
+    locale: stringValue(body.locale) ?? 'en-US',
+    model: HAIKU_MODEL,
+    personalized_styles: arrayValue(body.personalized_styles),
+    rendering_mode: stringValue(body.rendering_mode) ?? 'messages',
+    sync_sources: arrayValue(body.sync_sources),
+    tools: arrayValue(body.tools),
+  }
+  const timezone = stringValue(body.timezone)
+  if (timezone) sanitized.timezone = timezone
+  return sanitized
+}
+
+function parseCompletionURL(url: string): EndpointVars | null {
+  const path = pathFromURL(url)
+  const match = path.match(
+    /^\/api\/organizations\/([^/]+)\/chat_conversations\/([^/]+)\/completion$/,
+  )
+  if (!match) return null
+  return { organizationUuid: match[1], conversationUuid: match[2] }
+}
+
+function parseConversationURL(url: string): EndpointVars | null {
+  const path = pathFromURL(url)
+  const match = path.match(
+    /^\/api\/organizations\/([^/]+)\/chat_conversations\/([^/?]+)$/,
+  )
+  if (!match) return null
+  return { organizationUuid: match[1], conversationUuid: match[2] }
+}
+
+function pathFromURL(url: string): string {
+  try {
+    return new URL(url, location.href).pathname
+  } catch {
+    return url.split('?')[0]
+  }
+}
+
+function latestMessageUuid(body: unknown): string | undefined {
+  if (!isConversationBody(body)) return stringValue((body as { current_leaf_message_uuid?: unknown })?.current_leaf_message_uuid)
+  for (let i = body.chat_messages.length - 1; i >= 0; i -= 1) {
+    const uuid = messageUuid(body.chat_messages[i])
+    if (uuid) return uuid
+  }
+  return undefined
+}
+
+function messageUuid(msg: ChatMessage): string | undefined {
+  return stringValue(msg.uuid) ?? stringValue(msg.message_uuid) ?? stringValue(msg.id)
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function arrayValue(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : []
 }
 
 function isPromptBody(body: unknown): body is PromptBody {

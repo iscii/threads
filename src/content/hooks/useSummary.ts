@@ -53,7 +53,10 @@ export async function triggerSummarization(): Promise<void> {
     const res = await fetch(endpointURL, {
       method: 'POST',
       credentials: 'include',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        ...info.headers,
+        'content-type': 'application/json',
+      },
       body: JSON.stringify(body),
     })
     const text = await accumulateSSE(res)

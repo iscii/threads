@@ -1,4 +1,16 @@
-import { threads, activeId, openThread, closeThread, addMessage } from './threads'
+import {
+  threads,
+  activeId,
+  endpointInfo,
+  openThread,
+  closeThread,
+  addMessage,
+  initEndpointInfo,
+  setEndpointShape,
+  setEndpointVars,
+  updateEndpointHeaders,
+  loadThreadsForConv,
+} from './threads'
 
 beforeAll(() => {
   vi.stubGlobal('chrome', {
@@ -11,7 +23,7 @@ beforeAll(() => {
     },
   })
   Object.defineProperty(window, 'location', {
-    value: { pathname: '/chat/test-conv' },
+    value: { hostname: 'claude.ai', pathname: '/chat/test-conv' },
     configurable: true,
   })
 })
@@ -19,6 +31,14 @@ beforeAll(() => {
 beforeEach(() => {
   threads.value = []
   activeId.value = null
+  endpointInfo.value = null
+  vi.mocked(chrome.storage.local.set).mockClear()
+  vi.mocked(chrome.storage.local.get).mockReset()
+  vi.mocked(chrome.storage.local.get).mockImplementation((_, cb) => {
+    cb?.({})
+    return Promise.resolve({})
+  })
+  vi.mocked(chrome.storage.local.remove).mockClear()
 })
 
 describe('openThread', () => {
@@ -71,5 +91,73 @@ describe('addMessage', () => {
     expect(threads.value[0].messages).toHaveLength(2)
     expect(threads.value[0].messages[0].content).toBe('Q')
     expect(threads.value[0].messages[1].content).toBe('A')
+  })
+})
+
+describe('endpoint storage', () => {
+  it('stores only shape and variables, never headers', () => {
+    initEndpointInfo({
+      urlPattern: /completion/,
+      messages: {
+        endpointCaptured: 'endpoint',
+        summaryInjected: 'summary',
+        streamComplete: 'stream',
+      },
+      inject: vi.fn(),
+      buildCompletion: vi.fn(),
+      buildEndpoint: vi.fn((shape, vars) => ({
+        url: shape.url.replace('{conversationUuid}', vars.conversationUuid),
+        body: { ...(shape.body as object), parent_message_uuid: vars.parentMessageUuid },
+      })),
+    })
+
+    setEndpointShape({
+      url: '/chat_conversations/{conversationUuid}/completion',
+      body: { prompt: '', model: 'claude-haiku-4-5-20251001' },
+    })
+    setEndpointVars({
+      organizationUuid: 'org1',
+      conversationUuid: 'conv1',
+      parentMessageUuid: 'parent1',
+    })
+    vi.mocked(chrome.storage.local.set).mockClear()
+
+    updateEndpointHeaders({
+      authorization: 'Bearer secret',
+      'anthropic-device-id': 'device-id',
+      traceparent: 'trace',
+    })
+
+    expect(chrome.storage.local.set).not.toHaveBeenCalled()
+    expect(endpointInfo.value?.headers).toEqual({
+      authorization: 'Bearer secret',
+      'anthropic-device-id': 'device-id',
+      traceparent: 'trace',
+    })
+  })
+
+  it('removes legacy per-chat endpoint records on load', async () => {
+    const stored = {
+      'end:claude.ai:old-conv': {
+        url: '/completion',
+        headers: { authorization: 'Bearer secret' },
+      },
+      'end:claude.ai:shape': {
+        url: '/chat_conversations/{conversationUuid}/completion',
+        body: { prompt: '' },
+      },
+      'end:claude.ai:test-conv:vars': {
+        organizationUuid: 'org1',
+        conversationUuid: 'test-conv',
+      },
+    }
+    vi.mocked(chrome.storage.local.get).mockImplementation((_, cb) => {
+      cb?.(stored)
+      return Promise.resolve(stored)
+    })
+
+    await loadThreadsForConv()
+
+    expect(chrome.storage.local.remove).toHaveBeenCalledWith(['end:claude.ai:old-conv'])
   })
 })

@@ -1,5 +1,12 @@
 import type { NetworkAdapter } from '@/types'
-import { threads, endpointInfo, addMessage, setTyping } from '../lib/threads'
+import {
+  threads,
+  endpointInfo,
+  addMessage,
+  setTyping,
+  clearStoredEndpointInfo,
+  type EndpointInfo,
+} from '../lib/threads'
 import { accumulateSSE } from '../lib/accumulateSSE'
 import { sameOriginURL } from '../lib/endpoint'
 
@@ -50,20 +57,36 @@ export async function sendThreadReply(threadId: string, userText: string): Promi
   const body = na.buildCompletion(info.body, prompt)
 
   try {
-    const res = await fetch(endpointURL, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    const res = await fetch(endpointURL, completionInit(info, body))
+    if (!res.ok) throw new Error(`Thread reply failed with ${res.status}`)
     const reply = await accumulateSSE(res)
     addMessage(threadId, { role: 'assistant', content: reply || '(empty response)' })
   } catch {
+    if (info.persisted) {
+      clearStoredEndpointInfo()
+      addMessage(threadId, {
+        role: 'assistant',
+        content: '(Send a message in the main chat first to initialize the connection.)',
+      })
+      return
+    }
     addMessage(threadId, {
       role: 'assistant',
       content: '(Unable to reach Claude — the extension may need an update.)',
     })
   } finally {
     setTyping(threadId, false)
+  }
+}
+
+function completionInit(info: EndpointInfo, body: unknown): RequestInit {
+  return {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      ...info.headers,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
   }
 }

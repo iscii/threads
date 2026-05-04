@@ -1,8 +1,8 @@
-import { convId, threadKey, summaryKey } from './keys'
+import { convId, threadKey, summaryKey, endpointShapeKey, endpointVarsKey } from './keys'
 
 beforeEach(() => {
   Object.defineProperty(window, 'location', {
-    value: { pathname: '/chat/conv123/some-path' },
+    value: { hostname: 'claude.ai', pathname: '/chat/conv123/some-path' },
     configurable: true,
   })
 })
@@ -30,5 +30,17 @@ describe('threadKey', () => {
 describe('summaryKey', () => {
   it('returns sum:{convId}', () => {
     expect(summaryKey()).toBe('sum:conv123')
+  })
+})
+
+describe('endpointShapeKey', () => {
+  it('returns end:{hostname}:shape', () => {
+    expect(endpointShapeKey()).toBe('end:claude.ai:shape')
+  })
+})
+
+describe('endpointVarsKey', () => {
+  it('returns end:{hostname}:{convId}:vars', () => {
+    expect(endpointVarsKey()).toBe('end:claude.ai:conv123:vars')
   })
 })

@@ -1,7 +1,14 @@
 import { signal, batch } from '@preact/signals'
-import { convId, threadKey } from './keys'
+import type { EndpointShape, EndpointVars, NetworkAdapter } from '@/types'
+import { convId, endpointShapeKey, endpointVarsKey, threadKey } from './keys'
 
 export type ThreadMsg = { role: 'user' | 'assistant'; content: string }
+export type EndpointInfo = {
+  url: string
+  body: unknown
+  headers?: Record<string, string>
+  persisted?: boolean
+}
 
 export type Thread = {
   id: string
@@ -16,7 +23,12 @@ export type Thread = {
 export const threads = signal<Thread[]>([])
 export const activeId = signal<string | null>(null)
 export const summaryStatus = signal<'idle' | 'summarizing'>('idle')
-export const endpointInfo = signal<{ url: string; body: unknown } | null>(null)
+export const endpointInfo = signal<EndpointInfo | null>(null)
+
+let endpointAdapter: NetworkAdapter | null = null
+let endpointShape: EndpointShape | null = null
+let endpointVars: EndpointVars | null = null
+let endpointHeaders: Record<string, string> | undefined
 
 function persist(): void {
   const current = threads.value
@@ -94,13 +106,68 @@ export function setActive(id: string | null): void {
   activeId.value = id
 }
 
+export function initEndpointInfo(adapter: NetworkAdapter): void {
+  endpointAdapter = adapter
+  rebuildEndpointInfo(endpointInfo.value?.persisted)
+}
+
+export function setEndpointShape(shape: EndpointShape): void {
+  endpointShape = shape
+  chrome.storage.local.set({ [endpointShapeKey()]: shape })
+  rebuildEndpointInfo(false)
+}
+
+export function setEndpointVars(vars: EndpointVars): void {
+  endpointVars = vars
+  chrome.storage.local.set({ [endpointVarsKey()]: vars })
+  rebuildEndpointInfo(false)
+}
+
+export function updateEndpointHeaders(headers: Record<string, string>): void {
+  endpointHeaders = { ...endpointHeaders, ...headers }
+  rebuildEndpointInfo(endpointInfo.value?.persisted)
+}
+
+export function clearStoredEndpointInfo(): void {
+  endpointVars = null
+  endpointInfo.value = null
+  chrome.storage.local.remove(endpointVarsKey())
+}
+
+function rebuildEndpointInfo(persisted = false): void {
+  if (!endpointAdapter?.buildEndpoint || !endpointShape || !endpointVars) {
+    endpointInfo.value = null
+    return
+  }
+
+  const resolved = endpointAdapter.buildEndpoint(endpointShape, endpointVars)
+  endpointInfo.value = resolved
+    ? {
+        url: resolved.url,
+        body: resolved.body,
+        headers: endpointHeaders,
+        persisted,
+      }
+    : null
+}
+
 export async function loadThreadsForConv(): Promise<void> {
   const prefix = `thr:${convId()}:`
   const all = await chrome.storage.local.get(null) as Record<string, unknown>
+  const endpointPrefix = `end:${location.hostname}:`
+  const legacyEndpointKeys = Object.keys(all).filter(k =>
+    k.startsWith(endpointPrefix) &&
+    k !== endpointShapeKey() &&
+    !k.endsWith(':vars')
+  )
+  if (legacyEndpointKeys.length) chrome.storage.local.remove(legacyEndpointKeys)
+
   threads.value = Object.entries(all)
     .filter(([k]) => k.startsWith(prefix))
     .map(([, v]) => v as Thread)
   activeId.value = null
   summaryStatus.value = 'idle'
-  endpointInfo.value = null
+  endpointShape = (all[endpointShapeKey()] as EndpointShape | undefined) ?? null
+  endpointVars = (all[endpointVarsKey()] as EndpointVars | undefined) ?? null
+  rebuildEndpointInfo(true)
 }

@@ -6,8 +6,9 @@ export const CLAUDE_MSG = {
 
 export interface ClaudeEndpointCapturedMsg {
   type: typeof CLAUDE_MSG.ENDPOINT_CAPTURED
-  url: string
-  body: unknown
+  url?: string
+  body?: unknown
+  headers?: Record<string, string>
 }
 
 export interface ClaudeSummaryInjectedMsg {

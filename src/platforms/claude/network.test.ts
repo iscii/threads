@@ -156,3 +156,88 @@ describe('buildCompletion', () => {
     expect(result).toBe(notPrompt)
   })
 })
+
+describe('endpoint capture', () => {
+  const completionUrl =
+    '/api/organizations/org123/chat_conversations/conv456/completion'
+
+  it('stores a sanitized generic completion shape', () => {
+    const result = claudeAdapter.captureCompletion!(completionUrl, {
+      prompt: 'secret user prompt',
+      parent_message_uuid: 'parent-old',
+      turn_message_uuids: {
+        human_message_uuid: 'human-old',
+        assistant_message_uuid: 'assistant-old',
+      },
+      attachments: [],
+      files: [],
+      locale: 'en-US',
+      model: 'claude-sonnet-4-6',
+      personalized_styles: [{ type: 'default' }],
+      rendering_mode: 'messages',
+      sync_sources: [],
+      timezone: 'America/New_York',
+      tools: [{ name: 'web_search', type: 'web_search_v0' }],
+      extra_secret: 'do-not-store',
+    }) as any
+
+    expect(result.url).toBe(
+      '/api/organizations/{organizationUuid}/chat_conversations/{conversationUuid}/completion',
+    )
+    expect(result.body.prompt).toBe('')
+    expect(result.body.model).toBe('claude-haiku-4-5-20251001')
+    expect(result.body.parent_message_uuid).toBeUndefined()
+    expect(result.body.turn_message_uuids).toBeUndefined()
+    expect(result.body.extra_secret).toBeUndefined()
+    expect(result.body.tools).toEqual([{ name: 'web_search', type: 'web_search_v0' }])
+  })
+
+  it('captures conversation variables from completion requests', () => {
+    const vars = claudeAdapter.captureEndpointVars!(completionUrl, {
+      prompt: 'x',
+      parent_message_uuid: 'parent1',
+    })
+
+    expect(vars).toEqual({
+      organizationUuid: 'org123',
+      conversationUuid: 'conv456',
+      parentMessageUuid: 'parent1',
+    })
+  })
+
+  it('captures conversation variables from history responses', () => {
+    const vars = claudeAdapter.captureEndpointVars!(
+      '/api/organizations/org123/chat_conversations/conv456?tree=True',
+      {
+        chat_messages: [
+          { uuid: 'human1', sender: 'human', content: [] },
+          { uuid: 'assistant1', sender: 'assistant', content: [] },
+        ],
+      },
+    )
+
+    expect(vars).toEqual({
+      organizationUuid: 'org123',
+      conversationUuid: 'conv456',
+      parentMessageUuid: 'assistant1',
+    })
+  })
+
+  it('builds a concrete haiku endpoint from shape and variables', () => {
+    const built = claudeAdapter.buildEndpoint!(
+      {
+        url: '/api/organizations/{organizationUuid}/chat_conversations/{conversationUuid}/completion',
+        body: { prompt: '', model: 'claude-sonnet-4-6' },
+      },
+      {
+        organizationUuid: 'org123',
+        conversationUuid: 'conv456',
+        parentMessageUuid: 'parent1',
+      },
+    ) as any
+
+    expect(built.url).toBe(completionUrl)
+    expect(built.body.model).toBe('claude-haiku-4-5-20251001')
+    expect(built.body.parent_message_uuid).toBe('parent1')
+  })
+})
