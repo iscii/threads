@@ -1,6 +1,6 @@
 import { useComputed } from '@preact/signals'
 import { threads, summaryStatus } from '../lib/threads'
-import { highWaterMarks } from '../lib/summaryStore'
+import { coveredCount } from '../lib/summaryStore'
 
 function ChatBubbleIcon() {
   return (
@@ -34,7 +34,7 @@ export function Badge() {
   const count = useComputed(() => threads.value.filter(t => t.messages.length > 0).length)
   const dirtyCount = useComputed(() =>
     threads.value.filter(
-      t => t.included && t.messages.length > (highWaterMarks.value[t.blockId] ?? 0),
+      t => t.included && t.messages.length > coveredCount(t.blockId),
     ).length,
   )
   const isSummarizing = useComputed(() => summaryStatus.value === 'summarizing')
