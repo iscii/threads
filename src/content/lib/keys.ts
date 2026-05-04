@@ -6,3 +6,9 @@ export const threadKey = (blockId: string): string =>
 
 export const summaryKey = (): string =>
   `sum:${convId()}`
+
+export const endpointShapeKey = (): string =>
+  `end:${location.hostname}:shape`
+
+export const endpointVarsKey = (): string =>
+  `end:${location.hostname}:${convId()}:vars`
