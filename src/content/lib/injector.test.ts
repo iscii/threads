@@ -1,4 +1,5 @@
 import { createInjector } from './injector'
+import { hashText } from './hash'
 
 function makeBlock(text = 'Block text'): HTMLParagraphElement {
   const p = document.createElement('p')
@@ -144,6 +145,84 @@ describe('block instrumentation', () => {
     injector.instrumentBlocks([desc])
 
     expect(p.querySelectorAll('[data-thr-trigger]')).toHaveLength(1)
+  })
+
+  it('rebinds a disconnected block anchor from the current scroll DOM', () => {
+    const text = 'Same responsive block text'
+    const id = hashText(text)
+    const scrollRoot = document.createElement('div')
+    const oldBlock = makeBlock(text)
+    const oldParent = document.createElement('div')
+    oldParent.appendChild(oldBlock)
+    document.body.appendChild(oldParent)
+    document.body.appendChild(scrollRoot)
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() }, () => scrollRoot)
+
+    injector.instrumentBlocks([makeDescriptor(oldBlock, id)])
+    oldParent.remove()
+
+    const newBlock = makeBlock(text)
+    scrollRoot.appendChild(newBlock)
+    vi.spyOn(newBlock, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList)
+    vi.spyOn(newBlock, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      right: 100,
+      top: 250,
+      bottom: 270,
+      width: 100,
+      height: 20,
+      x: 0,
+      y: 250,
+      toJSON: () => ({}),
+    })
+
+    expect(injector.getBlockTop(id)).toBe(250)
+    expect(oldBlock.dataset.thrId).toBeUndefined()
+    expect(newBlock.dataset.thrId).toBe(id)
+    expect(newBlock.querySelectorAll('[data-thr-trigger]')).toHaveLength(1)
+  })
+
+  it('rebinds a connected block anchor that no longer has layout geometry', () => {
+    const text = 'Same hidden responsive block text'
+    const id = hashText(text)
+    const scrollRoot = document.createElement('div')
+    const oldBlock = makeBlock(text)
+    scrollRoot.appendChild(oldBlock)
+    document.body.appendChild(scrollRoot)
+    const injector = createInjector({ onBlockTriggerClicked: vi.fn() }, () => scrollRoot)
+
+    injector.instrumentBlocks([makeDescriptor(oldBlock, id)])
+    vi.spyOn(oldBlock, 'getClientRects').mockReturnValue([] as unknown as DOMRectList)
+    vi.spyOn(oldBlock, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 0,
+      width: 0,
+      height: 0,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    })
+
+    const newBlock = makeBlock(text)
+    scrollRoot.appendChild(newBlock)
+    vi.spyOn(newBlock, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList)
+    vi.spyOn(newBlock, 'getBoundingClientRect').mockReturnValue({
+      left: 0,
+      right: 100,
+      top: 300,
+      bottom: 320,
+      width: 100,
+      height: 20,
+      x: 0,
+      y: 300,
+      toJSON: () => ({}),
+    })
+
+    expect(injector.getBlockTop(id)).toBe(300)
+    expect(oldBlock.dataset.thrId).toBeUndefined()
+    expect(newBlock.dataset.thrId).toBe(id)
   })
 
   it('trigger button click calls onBlockTriggerClicked with block id', () => {
