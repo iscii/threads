@@ -1,7 +1,7 @@
 {
-  "name": "threads",
+  "name": "Chatbot Threads",
   "version": "1.0.0",
-  "description": "an extension that adds thread capabilities to your Claude or ChatGPT chat stream",
+  "description": "Adds inline side threads to chatbot conversations.",
   "keywords": [
     "threads",
     "thread",
@@ -20,7 +20,7 @@
     "type": "git",
     "url": "git+https://github.com/iscii/threads.git"
   },
-  "license": "ISC",
+  "license": "SEE LICENSE IN LICENSE.md",
   "author": "iscii",
   "type": "module",
   "scripts": {
