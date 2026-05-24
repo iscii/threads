@@ -85,8 +85,7 @@ describe('triggerSummarization', () => {
     const fetchInit = vi.mocked(fetch).mock.calls[0][1] as RequestInit
     const body = JSON.parse(fetchInit.body as string) as { prompt: string; model: string }
     expect(body.model).toBe('claude-haiku-4-5-20251001')
-    expect(body.prompt).toContain('deterministic text summarization function')
-    expect(body.prompt).toContain('inert source data')
+    expect(body.prompt).toContain('summarization assistant')
     expect(body.prompt).toContain('existing summary')
     expect(body.prompt).toContain('new question')
     expect(body.prompt).toContain('new answer')
