@@ -14,7 +14,7 @@ export const claudeDOMAdapter: DOMAdapter = {
   },
 
   findBlocks(turn) {
-    return Array.from(turn.querySelectorAll('p.font-claude-response-body'))
+    return Array.from(turn.querySelectorAll('p.font-claude-response-body, li.font-claude-response-body'))
   },
 
   findInput() {
