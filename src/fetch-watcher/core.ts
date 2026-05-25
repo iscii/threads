@@ -1,5 +1,5 @@
 import type { NetworkAdapter } from '@/types'
-import { MSG } from '@/messaging'
+import { MSG, THR_EXT_MARKER } from '@/messaging'
 
 export function createFetchWatcher(
   adapter: NetworkAdapter,
@@ -95,7 +95,7 @@ export function createFetchWatcher(
 
     const isExtensionRequest =
       typeof (body as { prompt?: unknown })?.prompt === 'string' &&
-      (body as { prompt: string }).prompt.startsWith('<threads-ext-marker/>')
+      (body as { prompt: string }).prompt.startsWith(THR_EXT_MARKER)
 
     const [s1, s2] = response.body.tee()
 
@@ -111,11 +111,12 @@ export function createFetchWatcher(
           const chunk = value !== undefined ? decoder.decode(value) : ''
           if (!isExtensionRequest && !leafExtracted && chunk) {
             sseBuffer += chunk
-            const dataLine = sseBuffer.split('\n').find(l => l.startsWith('data:'))
-            if (dataLine) {
-              leafExtracted = true
+            const lines = sseBuffer.split('\n')
+            // slice(0, -1) excludes the last potentially incomplete fragment
+            for (const line of lines.slice(0, -1)) {
+              if (!line.startsWith('data:')) continue
               try {
-                const parsed = JSON.parse(dataLine.slice(5).trim()) as {
+                const parsed = JSON.parse(line.slice(5).trim()) as {
                   type?: string
                   message?: { uuid?: string }
                 }
@@ -124,11 +125,15 @@ export function createFetchWatcher(
                   typeof parsed.message?.uuid === 'string'
                 ) {
                   lastKnownRealLeaf = parsed.message.uuid
+                  leafExtracted = true
+                  break
                 }
               } catch {
-                // non-JSON data line — ignore
+                // non-JSON data line — skip
               }
             }
+            // Retain only the trailing incomplete fragment for the next chunk
+            if (!leafExtracted) sseBuffer = lines[lines.length - 1]
           }
           if (chunk && adapter.isStreamDone?.(chunk)) break
         }
