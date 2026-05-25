@@ -9,6 +9,7 @@ import {
 } from '../lib/threads'
 import { accumulateSSE } from '../lib/accumulateSSE'
 import { sameOriginURL } from '../lib/endpoint'
+import { THR_EXT_MARKER } from '@/messaging'
 
 let _networkAdapter: NetworkAdapter | null = null
 
@@ -52,7 +53,7 @@ export async function sendThreadReply(threadId: string, userText: string): Promi
   const history = (fresh?.messages ?? [])
     .map(m => `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`)
     .join('\n')
-  const prompt = `${systemPrompt}\n\n${history}\n\nAssistant:`
+  const prompt = `${THR_EXT_MARKER}\n\n${systemPrompt}\n\n${history}\n\nAssistant:`
 
   const body = na.buildCompletion(info.body, prompt)
 

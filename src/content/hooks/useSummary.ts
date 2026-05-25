@@ -1,6 +1,7 @@
 import type { NetworkAdapter } from '@/types'
 import type { Thread } from '../lib/threads'
 import { summaryStatus, endpointInfo } from '../lib/threads'
+import { THR_EXT_MARKER } from '@/messaging'
 import {
   dirtyThreads,
   advanceMarks,
@@ -42,6 +43,7 @@ function buildSummarizationPrompt(dirty: Thread[]): string {
   })
 
   return [
+    THR_EXT_MARKER,
     'You are a summarization assistant. Given the thread of messages and an existing summary',
     'return an updated one-sentence summary that captures the key topic and emphasizing new information from the new messages.',
     'Please respond only with a valid JSON object.',
