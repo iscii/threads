@@ -6,6 +6,7 @@ export function createFetchWatcher(
   originalFetch: typeof fetch,
 ) {
   let stagedSummaries: string[] = []
+  let lastKnownRealLeaf: string | null = null
 
   window.addEventListener('summaryEnqueued', (e: Event) => {
     const customEvent = e as CustomEvent<{ text: string }>
@@ -38,7 +39,7 @@ export function createFetchWatcher(
         { type: adapter.messages.endpointCaptured, url, body: json, headers },
         location.origin,
       )
-      return new Response(JSON.stringify(adapter.history.filter(json)), {
+      return new Response(JSON.stringify(adapter.history.filter(json, lastKnownRealLeaf)), {
         status: response.status,
         statusText: response.statusText,
         headers: response.headers,
@@ -92,18 +93,44 @@ export function createFetchWatcher(
       return response
     }
 
+    const isExtensionRequest =
+      typeof (body as { prompt?: unknown })?.prompt === 'string' &&
+      (body as { prompt: string }).prompt.startsWith('<threads-ext-marker/>')
+
     const [s1, s2] = response.body.tee()
 
     void (async () => {
       const reader = s2.getReader()
       const decoder = new TextDecoder()
+      let leafExtracted = false
+      let sseBuffer = ''
       try {
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-          if (value !== undefined && adapter.isStreamDone?.(decoder.decode(value))) {
-            break
+          const chunk = value !== undefined ? decoder.decode(value) : ''
+          if (!isExtensionRequest && !leafExtracted && chunk) {
+            sseBuffer += chunk
+            const dataLine = sseBuffer.split('\n').find(l => l.startsWith('data:'))
+            if (dataLine) {
+              leafExtracted = true
+              try {
+                const parsed = JSON.parse(dataLine.slice(5).trim()) as {
+                  type?: string
+                  message?: { uuid?: string }
+                }
+                if (
+                  parsed.type === 'message_start' &&
+                  typeof parsed.message?.uuid === 'string'
+                ) {
+                  lastKnownRealLeaf = parsed.message.uuid
+                }
+              } catch {
+                // non-JSON data line — ignore
+              }
+            }
           }
+          if (chunk && adapter.isStreamDone?.(chunk)) break
         }
       } finally {
         reader.releaseLock()

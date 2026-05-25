@@ -424,7 +424,7 @@ describe('history filtering', () => {
     const response = await interceptFetch(HISTORY_URL, { method: 'GET' })
     const json = await response.json()
 
-    expect(filter).toHaveBeenCalledWith(rawBody)
+    expect(filter).toHaveBeenCalledWith(rawBody, null)
     expect(json).toEqual(filteredBody)
   })
 
@@ -486,5 +486,126 @@ describe('history filtering', () => {
     await interceptFetch(HISTORY_URL, { method: 'GET' })
 
     expect(originalFetch).toHaveBeenCalledWith(HISTORY_URL, { method: 'GET' })
+  })
+})
+
+describe('lastKnownRealLeaf tracking', () => {
+  const HISTORY_URL = 'https://claude.ai/api/organizations/org1/chat_conversations/conv1?tree=True'
+  const MESSAGE_START_SSE = [
+    'data: {"type":"message_start","message":{"uuid":"real-leaf-uuid"}}',
+    '',
+    'data: [DONE]',
+    '',
+  ].join('\n')
+
+  it('passes lastKnownRealLeaf to history.filter after non-extension POST', async () => {
+    const originalFetch = vi.fn()
+      .mockResolvedValueOnce(makeResponse(makeStream(MESSAGE_START_SSE)))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ chat_messages: [] }), { status: 200 }))
+    const filter = vi.fn((body: unknown) => body)
+    const adapter = {
+      ...makeAdapter(),
+      history: {
+        urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
+        filter,
+      },
+    }
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+    const messages = collectMessages()
+
+    const postResponse = await interceptFetch(COMPLETION_URL, {
+      method: 'POST',
+      body: JSON.stringify({ prompt: 'Hello' }), // no marker
+    })
+    await postResponse.text()
+
+    await vi.waitFor(() => {
+      expect(messages.get().find(m => m.type === MSG_TYPES.streamComplete)).toBeDefined()
+    }, { timeout: 200 })
+
+    await interceptFetch(HISTORY_URL, { method: 'GET' })
+
+    expect(filter).toHaveBeenCalledWith(expect.anything(), 'real-leaf-uuid')
+    messages.cleanup()
+  })
+
+  it('does NOT update lastKnownRealLeaf for extension requests', async () => {
+    const originalFetch = vi.fn()
+      .mockResolvedValueOnce(makeResponse(makeStream(MESSAGE_START_SSE)))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ chat_messages: [] }), { status: 200 }))
+    const filter = vi.fn((body: unknown) => body)
+    const adapter = {
+      ...makeAdapter(),
+      history: {
+        urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
+        filter,
+      },
+    }
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+    const messages = collectMessages()
+
+    // Extension POST — prompt starts with marker
+    const extBody = JSON.stringify({ prompt: '<threads-ext-marker/>\nSummarize.' })
+    const postResponse = await interceptFetch(COMPLETION_URL, { method: 'POST', body: extBody })
+    await postResponse.text()
+
+    await vi.waitFor(() => {
+      expect(messages.get().find(m => m.type === MSG_TYPES.streamComplete)).toBeDefined()
+    }, { timeout: 200 })
+
+    await interceptFetch(HISTORY_URL, { method: 'GET' })
+
+    expect(filter).toHaveBeenCalledWith(expect.anything(), null)
+    messages.cleanup()
+  })
+
+  it('retains lastKnownRealLeaf across requests — extension POST does not clobber it', async () => {
+    const realSSE = [
+      'data: {"type":"message_start","message":{"uuid":"real-leaf"}}',
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n')
+    const extSSE = [
+      'data: {"type":"message_start","message":{"uuid":"ext-leaf"}}',
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n')
+
+    const originalFetch = vi.fn()
+      .mockResolvedValueOnce(makeResponse(makeStream(realSSE)))   // real POST
+      .mockResolvedValueOnce(makeResponse(makeStream(extSSE)))    // extension POST
+      .mockResolvedValueOnce(new Response(JSON.stringify({ chat_messages: [] }), { status: 200 })) // GET
+    const filter = vi.fn((body: unknown) => body)
+    const adapter = {
+      ...makeAdapter(),
+      history: {
+        urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
+        filter,
+      },
+    }
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+    const messages = collectMessages()
+
+    // Real POST
+    const r1 = await interceptFetch(COMPLETION_URL, { method: 'POST', body: JSON.stringify({ prompt: 'Hello' }) })
+    await r1.text()
+    await vi.waitFor(() => {
+      expect(messages.get().filter(m => m.type === MSG_TYPES.streamComplete).length).toBeGreaterThanOrEqual(1)
+    }, { timeout: 200 })
+
+    // Extension POST
+    const r2 = await interceptFetch(COMPLETION_URL, { method: 'POST', body: JSON.stringify({ prompt: '<threads-ext-marker/>\nSummarize.' }) })
+    await r2.text()
+    await vi.waitFor(() => {
+      expect(messages.get().filter(m => m.type === MSG_TYPES.streamComplete).length).toBeGreaterThanOrEqual(2)
+    }, { timeout: 200 })
+
+    // GET — filter should still see the real leaf, not the extension leaf
+    await interceptFetch(HISTORY_URL, { method: 'GET' })
+
+    expect(filter).toHaveBeenCalledWith(expect.anything(), 'real-leaf')
+    messages.cleanup()
   })
 })
