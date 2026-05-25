@@ -34,7 +34,10 @@ export function createObserver(
 
   function instrumentTurn(turn: Element): void {
     if (instrumented.has(turn)) return
-    // Use includes (not startsWith) — rendered textContent may have surrounding DOM structure
+    // Defense-in-depth: remove any assistant turn whose textContent contains the marker.
+    // Effective only on platforms where the turn container encompasses human+assistant content.
+    // On Claude.ai, the human message is a sibling element so this check is usually false;
+    // the primary protection is history.filter stripping tagged messages before GET responses.
     if (turn.textContent?.includes(THR_EXT_MARKER)) {
       turn.remove()
       return

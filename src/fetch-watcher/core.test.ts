@@ -608,4 +608,45 @@ describe('lastKnownRealLeaf tracking', () => {
     expect(filter).toHaveBeenCalledWith(expect.anything(), 'real-leaf')
     messages.cleanup()
   })
+
+  it('resets lastKnownRealLeaf to null on resetLeaf call', async () => {
+    const realSSE = [
+      'data: {"type":"message_start","message":{"uuid":"conv-a-leaf"}}',
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n')
+    const originalFetch = vi.fn()
+      .mockResolvedValueOnce(makeResponse(makeStream(realSSE)))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ chat_messages: [] }), { status: 200 }))
+    const filter = vi.fn((body: unknown) => body)
+    const adapter = {
+      ...makeAdapter(),
+      history: {
+        urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
+        filter,
+      },
+    }
+    const { interceptFetch, resetLeaf } = createFetchWatcher(adapter, originalFetch)
+    const messages = collectMessages()
+
+    // Establish a known real leaf
+    const postResponse = await interceptFetch(COMPLETION_URL, {
+      method: 'POST',
+      body: JSON.stringify({ prompt: 'Hello' }),
+    })
+    await postResponse.text()
+    await vi.waitFor(() => {
+      expect(messages.get().find(m => m.type === MSG_TYPES.streamComplete)).toBeDefined()
+    }, { timeout: 200 })
+
+    // Simulate SPA navigation
+    resetLeaf()
+
+    // GET after navigation — lastKnownRealLeaf should be null
+    await interceptFetch(HISTORY_URL, { method: 'GET' })
+
+    expect(filter).toHaveBeenCalledWith(expect.anything(), null)
+    messages.cleanup()
+  })
 })

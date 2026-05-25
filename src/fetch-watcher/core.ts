@@ -154,7 +154,7 @@ export function createFetchWatcher(
     })
   }
 
-  return { interceptFetch, handleMessage }
+  return { interceptFetch, handleMessage, resetLeaf: () => { lastKnownRealLeaf = null } }
 }
 
 async function requestBodyText(
