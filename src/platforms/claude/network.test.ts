@@ -228,7 +228,7 @@ describe('history.filter (tagged message stripping)', () => {
 
   it('leaves current_leaf_message_uuid when it points to a real message', () => {
     const body = makeHistory([realHuman, realAssistant, taggedHuman, pairedAssistant], 'a-real')
-    const result = claudeAdapter.history!.filter(body, 'a-real') as { current_leaf_message_uuid: string }
+    const result = claudeAdapter.history!.filter(body, 'some-other-leaf') as { current_leaf_message_uuid: string }
     expect(result.current_leaf_message_uuid).toBe('a-real')
   })
 
@@ -246,6 +246,12 @@ describe('history.filter (tagged message stripping)', () => {
     }])
     const result = claudeAdapter.history!.filter(body) as { chat_messages: { content: { text: string }[] }[] }
     expect(result.chat_messages[0].content[0].text).toBe('Hello')
+  })
+
+  it('does not add current_leaf_message_uuid when absent from source', () => {
+    const body = makeHistory([taggedHuman, pairedAssistant]) // no currentLeaf arg
+    const result = claudeAdapter.history!.filter(body) as Record<string, unknown>
+    expect('current_leaf_message_uuid' in result).toBe(false)
   })
 })
 

@@ -159,8 +159,7 @@ export const claudeAdapter: NetworkAdapter = {
           }
         })
 
-      const bodyAny = body as Record<string, unknown>
-      const currentLeaf = stringValue(bodyAny.current_leaf_message_uuid)
+      const currentLeaf = stringValue(body.current_leaf_message_uuid)
       const fixedLeaf =
         currentLeaf && strippedUUIDs.has(currentLeaf) && lastKnownRealLeaf
           ? lastKnownRealLeaf
