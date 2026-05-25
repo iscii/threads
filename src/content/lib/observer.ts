@@ -1,6 +1,7 @@
 import type { DOMAdapter } from '@/types'
 import type { DOMLayerCallbacks, BlockDescriptor } from './types'
 import { hashText } from './hash'
+import { THR_EXT_MARKER } from '@/messaging'
 
 export function createObserver(
   adapter: DOMAdapter,
@@ -33,6 +34,10 @@ export function createObserver(
 
   function instrumentTurn(turn: Element): void {
     if (instrumented.has(turn)) return
+    if (turn.textContent?.includes(THR_EXT_MARKER)) {
+      turn.remove()
+      return
+    }
     if (!adapter.isStreamingComplete(turn)) return
     const blocks = adapter.findBlocks(turn)
     if (blocks.length === 0) return
