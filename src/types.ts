@@ -24,7 +24,7 @@ export interface NetworkAdapter {
   isStreamDone?(chunk: string): boolean
   history?: {
     urlPattern: RegExp
-    filter(body: unknown): unknown
+    filter(body: unknown, lastKnownRealLeaf?: string | null): unknown
   }
 }
 
