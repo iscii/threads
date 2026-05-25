@@ -34,6 +34,7 @@ export function createObserver(
 
   function instrumentTurn(turn: Element): void {
     if (instrumented.has(turn)) return
+    // Use includes (not startsWith) — rendered textContent may have surrounding DOM structure
     if (turn.textContent?.includes(THR_EXT_MARKER)) {
       turn.remove()
       return
