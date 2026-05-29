@@ -1,5 +1,5 @@
 import { render } from 'preact'
-import { endpointInfo } from './lib/threads'
+import { endpointInfo, setEndpointInfo } from './lib/threads'
 import { createCoordinator } from './lib/adapter'
 import { initQueue } from './hooks/useQueue'
 import { initSummary } from './hooks/useSummary'
@@ -22,7 +22,17 @@ if (platform) {
     if (e.source !== window) return
     const d = e.data as { type?: string; url?: string; body?: unknown }
     if (d?.type === platform.networkAdapter.messages.endpointCaptured) {
-      endpointInfo.value = { url: d.url!, body: d.body }
+      setEndpointInfo({ url: d.url!, body: d.body })
+    }
+    if (d?.type === platform.networkAdapter.messages.runtimeValues) {
+      platform.networkAdapter.observeRuntimeValues?.(d.url!, d.body)
+      const current = endpointInfo.value
+      if (current) {
+        setEndpointInfo({
+          ...current,
+          body: platform.networkAdapter.refreshCapturedBody?.(current.body) ?? current.body,
+        })
+      }
     }
   })
 

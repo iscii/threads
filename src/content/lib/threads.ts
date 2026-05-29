@@ -3,6 +3,8 @@ import { convId, threadKey } from './keys'
 
 export type ThreadMsg = { role: 'user' | 'assistant'; content: string }
 
+export type EndpointInfo = { url: string; body: unknown }
+
 export type Thread = {
   id: string
   blockId: string
@@ -16,7 +18,47 @@ export type Thread = {
 export const threads = signal<Thread[]>([])
 export const activeId = signal<string | null>(null)
 export const summaryStatus = signal<'idle' | 'summarizing' | 'included'>('idle')
-export const endpointInfo = signal<{ url: string; body: unknown } | null>(null)
+export const endpointInfo = signal<EndpointInfo | null>(null)
+
+const endpointKey = (): string => `endpoint:${convId()}`
+
+function isEndpointInfo(value: unknown): value is EndpointInfo {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as EndpointInfo).url === 'string' &&
+    'body' in value
+  )
+}
+
+function loadEndpointInfo(): EndpointInfo | null {
+  try {
+    const raw = localStorage.getItem(endpointKey())
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as unknown
+    return isEndpointInfo(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function setEndpointInfo(info: EndpointInfo): void {
+  endpointInfo.value = info
+  try {
+    localStorage.setItem(endpointKey(), JSON.stringify(info))
+  } catch {
+    // Best-effort cache only. Runtime capture still works in-memory.
+  }
+}
+
+export function clearEndpointInfo(): void {
+  endpointInfo.value = null
+  try {
+    localStorage.removeItem(endpointKey())
+  } catch {
+    // Best-effort cache only.
+  }
+}
 
 function persist(): void {
   const current = threads.value
@@ -102,5 +144,5 @@ export async function loadThreadsForConv(): Promise<void> {
     .map(([, v]) => v as Thread)
   activeId.value = null
   summaryStatus.value = 'idle'
-  endpointInfo.value = null
+  endpointInfo.value = loadEndpointInfo()
 }

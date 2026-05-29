@@ -1,11 +1,23 @@
-import { threads, activeId, openThread, closeThread, addMessage } from './threads'
+import {
+  threads,
+  activeId,
+  endpointInfo,
+  openThread,
+  closeThread,
+  addMessage,
+  loadThreadsForConv,
+  setEndpointInfo,
+} from './threads'
 
 beforeAll(() => {
   vi.stubGlobal('chrome', {
     storage: {
       local: {
         set: vi.fn(),
-        get: vi.fn((_, cb) => cb && cb({})),
+        get: vi.fn((_, cb) => {
+          cb?.({})
+          return Promise.resolve({})
+        }),
         remove: vi.fn(),
       },
     },
@@ -19,6 +31,8 @@ beforeAll(() => {
 beforeEach(() => {
   threads.value = []
   activeId.value = null
+  endpointInfo.value = null
+  localStorage.clear()
 })
 
 describe('openThread', () => {
@@ -71,5 +85,43 @@ describe('addMessage', () => {
     expect(threads.value[0].messages).toHaveLength(2)
     expect(threads.value[0].messages[0].content).toBe('Q')
     expect(threads.value[0].messages[1].content).toBe('A')
+  })
+})
+
+describe('endpointInfo persistence', () => {
+  it('saves captured endpoint info in localStorage for the current conversation', () => {
+    setEndpointInfo({
+      url: '/api/organizations/org/chat_conversations/test-conv/completion',
+      body: { prompt: 'hello', model: 'claude-sonnet-4-5' },
+    })
+
+    const raw = localStorage.getItem('endpoint:test-conv')
+    expect(raw).not.toBeNull()
+    expect(JSON.parse(raw!)).toEqual({
+      url: '/api/organizations/org/chat_conversations/test-conv/completion',
+      body: { prompt: 'hello', model: 'claude-sonnet-4-5' },
+    })
+  })
+
+  it('loads persisted endpoint info when loading a conversation', async () => {
+    localStorage.setItem('endpoint:test-conv', JSON.stringify({
+      url: '/api/organizations/org/chat_conversations/test-conv/completion',
+      body: { prompt: 'old prompt', turn_message_uuids: { human_message_uuid: 'h', assistant_message_uuid: 'a' } },
+    }))
+
+    await loadThreadsForConv()
+
+    expect(endpointInfo.value).toEqual({
+      url: '/api/organizations/org/chat_conversations/test-conv/completion',
+      body: { prompt: 'old prompt', turn_message_uuids: { human_message_uuid: 'h', assistant_message_uuid: 'a' } },
+    })
+  })
+
+  it('ignores invalid persisted endpoint info', async () => {
+    localStorage.setItem('endpoint:test-conv', JSON.stringify({ url: 42, body: {} }))
+
+    await loadThreadsForConv()
+
+    expect(endpointInfo.value).toBeNull()
   })
 })

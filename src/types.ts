@@ -4,9 +4,12 @@ export interface NetworkAdapter {
     endpointCaptured: string
     summaryInjected: string
     streamComplete: string
+    runtimeValues?: string
   }
   inject(body: unknown, summaries: string[]): { body: unknown; injected: boolean }
   buildCompletion(capturedBody: unknown, prompt: string, model?: string): unknown
+  observeRuntimeValues?(url: string, body: unknown): void
+  refreshCapturedBody?(body: unknown): unknown
   isStreamDone?(chunk: string): boolean
   history?: {
     urlPattern: RegExp

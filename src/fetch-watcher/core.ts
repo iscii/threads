@@ -7,6 +7,15 @@ export function createFetchWatcher(
 ) {
   let stagedSummaries: string[] = []
 
+  function parseJSONBody(init: RequestInit): unknown | null {
+    try {
+      if (typeof init.body !== 'string') return null
+      return JSON.parse(init.body) as unknown
+    } catch {
+      return null
+    }
+  }
+
   function handleMessage(event: MessageEvent): void {
     if (event.source !== window) return
     const data = event.data as { type?: string; summaryTexts?: string[] }
@@ -36,19 +45,25 @@ export function createFetchWatcher(
     }
 
     if (method !== 'POST' || !adapter.urlPattern.test(url)) {
+      const runtimeBody = parseJSONBody(init)
+      if (runtimeBody !== null) {
+        adapter.observeRuntimeValues?.(url, runtimeBody)
+        if (adapter.messages.runtimeValues) {
+          window.postMessage(
+            { type: adapter.messages.runtimeValues, url, body: runtimeBody },
+            location.origin,
+          )
+        }
+      }
       return originalFetch(input, init)
     }
 
-    let body: unknown = null
-    try {
-      body = JSON.parse(init.body as string)
-    } catch {
-      // Non-JSON body: adapter.inject only understands structured bodies, so skip
-      // injection and keep staged summaries for the next request.
-    }
+    const body = parseJSONBody(init)
+
+    const capturedBody = body === null ? null : adapter.refreshCapturedBody?.(body) ?? body
 
     window.postMessage(
-      { type: adapter.messages.endpointCaptured, url, body },
+      { type: adapter.messages.endpointCaptured, url, body: capturedBody },
       location.origin,
     )
 

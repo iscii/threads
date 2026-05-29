@@ -111,6 +111,34 @@ describe('history.filter', () => {
   })
 })
 
+describe('runtime value refresh', () => {
+  it('replaces stale rotating token fields in captured bodies with latest observed values', () => {
+    claudeAdapter.observeRuntimeValues?.('/api/bootstrap', {
+      nested: { client_nonce: 'fresh-nonce' },
+      token: 'fresh-token',
+      prompt: 'do-not-copy',
+    })
+
+    const refreshed = claudeAdapter.refreshCapturedBody?.({
+      prompt: 'persisted prompt',
+      token: 'stale-token',
+      nested: { client_nonce: 'stale-nonce' },
+    }) as any
+
+    expect(refreshed.prompt).toBe('persisted prompt')
+    expect(refreshed.token).toBe('fresh-token')
+    expect(refreshed.nested.client_nonce).toBe('fresh-nonce')
+  })
+
+  it('does not introduce rotating fields that were not in the captured completion shape', () => {
+    claudeAdapter.observeRuntimeValues?.('/api/bootstrap', { token: 'fresh-token' })
+
+    const refreshed = claudeAdapter.refreshCapturedBody?.({ prompt: 'persisted prompt' }) as any
+
+    expect(refreshed).toEqual({ prompt: 'persisted prompt' })
+  })
+})
+
 describe('buildCompletion', () => {
   it('spreads base body and substitutes prompt', () => {
     const base = { prompt: 'original', model: 'claude-sonnet-4-6', other: 'value' }

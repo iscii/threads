@@ -1,5 +1,5 @@
 import type { NetworkAdapter } from '@/types'
-import { threads, endpointInfo, addMessage, setTyping } from '../lib/threads'
+import { threads, endpointInfo, addMessage, setTyping, clearEndpointInfo } from '../lib/threads'
 import { accumulateSSE } from '../lib/accumulateSSE'
 import { sameOriginURL } from '../lib/endpoint'
 
@@ -56,12 +56,14 @@ export async function sendThreadReply(threadId: string, userText: string): Promi
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     })
+    if (!res.ok) throw new Error(`completion request failed: ${res.status}`)
     const reply = await accumulateSSE(res)
     addMessage(threadId, { role: 'assistant', content: reply || '(empty response)' })
   } catch {
+    clearEndpointInfo()
     addMessage(threadId, {
       role: 'assistant',
-      content: '(Unable to reach Claude — the extension may need an update.)',
+      content: '(Send a message in the main chat first to initialize the connection.)',
     })
   } finally {
     setTyping(threadId, false)

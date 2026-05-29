@@ -107,6 +107,45 @@ describe('endpoint captured', () => {
 
     messages.cleanup()
   })
+
+  it('refreshes rotating fields before emitting captured endpoint info', async () => {
+    const originalFetch = vi.fn().mockResolvedValue(makeResponse())
+    const adapter = {
+      ...makeAdapter(),
+      observeRuntimeValues: vi.fn(),
+      refreshCapturedBody: vi.fn().mockReturnValue({ prompt: 'hello', token: 'fresh' }),
+    }
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+    const messages = collectMessages()
+
+    await interceptFetch(COMPLETION_URL, {
+      method: 'POST',
+      body: JSON.stringify({ prompt: 'hello', token: 'stale' }),
+    })
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+
+    const captured = messages.get().find(
+      (m) => m.type === MSG_TYPES.endpointCaptured,
+    )
+    expect(adapter.refreshCapturedBody).toHaveBeenCalledWith({ prompt: 'hello', token: 'stale' })
+    expect(captured.body).toEqual({ prompt: 'hello', token: 'fresh' })
+
+    messages.cleanup()
+  })
+
+  it('observes JSON bodies from non-completion POSTs for later rotating-value refresh', async () => {
+    const originalFetch = vi.fn().mockResolvedValue(makeResponse())
+    const adapter = {
+      ...makeAdapter(),
+      observeRuntimeValues: vi.fn(),
+    }
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+    const body = { token: 'fresh-token' }
+
+    await interceptFetch(OTHER_URL, { method: 'POST', body: JSON.stringify(body) })
+
+    expect(adapter.observeRuntimeValues).toHaveBeenCalledWith(OTHER_URL, body)
+  })
 })
 
 describe('injection pipeline', () => {

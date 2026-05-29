@@ -2,6 +2,7 @@ export const CLAUDE_MSG = {
   ENDPOINT_CAPTURED: 'CLAUDE_ENDPOINT_CAPTURED',
   SUMMARY_INJECTED: 'CLAUDE_SUMMARY_INJECTED',
   STREAM_COMPLETE: 'CLAUDE_STREAM_COMPLETE',
+  RUNTIME_VALUES: 'CLAUDE_RUNTIME_VALUES',
 } as const
 
 export interface ClaudeEndpointCapturedMsg {
@@ -18,7 +19,14 @@ export interface ClaudeStreamCompleteMsg {
   type: typeof CLAUDE_MSG.STREAM_COMPLETE
 }
 
+export interface ClaudeRuntimeValuesMsg {
+  type: typeof CLAUDE_MSG.RUNTIME_VALUES
+  url: string
+  body: unknown
+}
+
 export type ClaudeOutboundMsg =
   | ClaudeEndpointCapturedMsg
   | ClaudeSummaryInjectedMsg
   | ClaudeStreamCompleteMsg
+  | ClaudeRuntimeValuesMsg
