@@ -1,5 +1,5 @@
 import type { EndpointShape, EndpointVars, NetworkAdapter } from '@/types'
-import { THR_CONTEXT_TAG, THR_CONTEXT_STRIP_RE } from '@/messaging'
+import { THR_CONTEXT_TAG, THR_CONTEXT_STRIP_RE, THR_EXT_MARKER } from '@/messaging'
 import { CLAUDE_MSG } from './messaging'
 
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001'
@@ -115,11 +115,39 @@ export const claudeAdapter: NetworkAdapter = {
   history: {
     urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
 
-    filter(body: unknown): unknown {
+    filter(body: unknown, lastKnownRealLeaf?: string | null): unknown {
       if (!isConversationBody(body)) return body
-      return {
-        ...body,
-        chat_messages: body.chat_messages.map(msg => {
+
+      // Collect UUIDs of tagged human messages
+      const taggedHumanUUIDs = new Set<string>()
+      for (const msg of body.chat_messages) {
+        if (msg.sender === 'human') {
+          const firstText = msg.content.find(b => b.type === 'text')?.text
+          if (typeof firstText === 'string' && firstText.startsWith(THR_EXT_MARKER)) {
+            const uuid = stringValue(msg.uuid)
+            if (uuid) taggedHumanUUIDs.add(uuid)
+          }
+        }
+      }
+
+      // Collect UUIDs of their paired assistant responses
+      const strippedUUIDs = new Set<string>(taggedHumanUUIDs)
+      for (const msg of body.chat_messages) {
+        if (msg.sender === 'assistant') {
+          const parent = stringValue(msg.parent_message_uuid)
+          if (parent && taggedHumanUUIDs.has(parent)) {
+            const uuid = stringValue(msg.uuid)
+            if (uuid) strippedUUIDs.add(uuid)
+          }
+        }
+      }
+
+      const chat_messages = body.chat_messages
+        .filter(msg => {
+          const uuid = stringValue(msg.uuid)
+          return !uuid || !strippedUUIDs.has(uuid)
+        })
+        .map(msg => {
           if (msg.sender !== 'human') return msg
           return {
             ...msg,
@@ -129,7 +157,18 @@ export const claudeAdapter: NetworkAdapter = {
                 : block
             ),
           }
-        }),
+        })
+
+      const currentLeaf = stringValue(body.current_leaf_message_uuid)
+      const fixedLeaf =
+        currentLeaf && strippedUUIDs.has(currentLeaf) && lastKnownRealLeaf
+          ? lastKnownRealLeaf
+          : currentLeaf
+
+      return {
+        ...body,
+        chat_messages,
+        ...(fixedLeaf !== undefined ? { current_leaf_message_uuid: fixedLeaf } : {}),
       }
     },
   },

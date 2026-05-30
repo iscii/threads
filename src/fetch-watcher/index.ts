@@ -10,7 +10,10 @@ const adapter = adapters[location.hostname]
 
 if (adapter) {
   const originalFetch = window.fetch.bind(window)
-  const { interceptFetch, handleMessage } = createFetchWatcher(adapter, originalFetch)
+  const { interceptFetch, handleMessage, resetLeaf } = createFetchWatcher(adapter, originalFetch)
   window.fetch = interceptFetch
   window.addEventListener('message', handleMessage)
+  ;(window as unknown as {
+    navigation?: { addEventListener(event: string, handler: () => void): void }
+  }).navigation?.addEventListener('navigate', resetLeaf)
 }

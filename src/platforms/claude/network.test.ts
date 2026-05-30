@@ -35,15 +35,15 @@ describe('history.urlPattern', () => {
 })
 
 describe('inject', () => {
-  it('prepends threads-context block to prompt', () => {
+  it('prepends recall block to prompt', () => {
     const result = claudeAdapter.inject({ prompt: 'Hello', model: 'claude-sonnet-4-6' }, ['Prior context'])
     expect(result.injected).toBe(true)
-    expect((result.body as any).prompt).toBe('<threads-context>\nPrior context\n</threads-context>\n\nHello')
+    expect((result.body as any).prompt).toBe('<recall>\nPrior context\n</recall>\n\nHello')
   })
 
   it('joins multiple summaries with newlines inside context block', () => {
     const result = claudeAdapter.inject({ prompt: 'Hello' }, ['Summary 1', 'Summary 2'])
-    expect((result.body as any).prompt).toBe('<threads-context>\nSummary 1\nSummary 2\n</threads-context>\n\nHello')
+    expect((result.body as any).prompt).toBe('<recall>\nSummary 1\nSummary 2\n</recall>\n\nHello')
   })
 
   it('preserves all other fields', () => {
@@ -82,11 +82,11 @@ describe('inject', () => {
 })
 
 describe('history.filter', () => {
-  it('strips injected threads-context block from human message text', () => {
+  it('strips injected recall block from human message text', () => {
     const body = {
       chat_messages: [{
         sender: 'human',
-        content: [{ type: 'text', text: '<threads-context>\nSummary\n</threads-context>\n\nHello' }],
+        content: [{ type: 'text', text: '<recall>\nSummary\n</recall>\n\nHello' }],
       }],
     }
     const result = claudeAdapter.history!.filter(body) as any
@@ -154,6 +154,104 @@ describe('buildCompletion', () => {
     const notPrompt = { messages: [] }
     const result = claudeAdapter.buildCompletion(notPrompt, 'x')
     expect(result).toBe(notPrompt)
+  })
+})
+
+describe('history.filter (tagged message stripping)', () => {
+  function makeHistory(messages: unknown[], currentLeaf?: string): unknown {
+    return {
+      chat_messages: messages,
+      ...(currentLeaf !== undefined ? { current_leaf_message_uuid: currentLeaf } : {}),
+    }
+  }
+
+  const taggedHuman = {
+    uuid: 'h-ext',
+    sender: 'human',
+    content: [{ type: 'text', text: '<x/>\nSummarize this.' }],
+  }
+  const pairedAssistant = {
+    uuid: 'a-ext',
+    sender: 'assistant',
+    parent_message_uuid: 'h-ext',
+    content: [{ type: 'text', text: 'Summary result.' }],
+  }
+  const realHuman = {
+    uuid: 'h-real',
+    sender: 'human',
+    content: [{ type: 'text', text: 'Hello' }],
+  }
+  const realAssistant = {
+    uuid: 'a-real',
+    sender: 'assistant',
+    parent_message_uuid: 'h-real',
+    content: [{ type: 'text', text: 'Hi there.' }],
+  }
+
+  it('strips tagged human+assistant pair, keeps real messages', () => {
+    const body = makeHistory([realHuman, realAssistant, taggedHuman, pairedAssistant])
+    const result = claudeAdapter.history!.filter(body) as { chat_messages: { uuid: string }[] }
+    expect(result.chat_messages).toHaveLength(2)
+    expect(result.chat_messages.map(m => m.uuid)).toEqual(['h-real', 'a-real'])
+  })
+
+  it('strips tagged human with no paired assistant (mid-stream stop)', () => {
+    const body = makeHistory([realHuman, realAssistant, taggedHuman])
+    const result = claudeAdapter.history!.filter(body) as { chat_messages: { uuid: string }[] }
+    expect(result.chat_messages).toHaveLength(2)
+    expect(result.chat_messages.map(m => m.uuid)).toEqual(['h-real', 'a-real'])
+  })
+
+  it('strips multiple tagged pairs', () => {
+    const taggedHuman2 = {
+      uuid: 'h-ext2',
+      sender: 'human',
+      content: [{ type: 'text', text: '<x/>\nOther prompt.' }],
+    }
+    const pairedAssistant2 = {
+      uuid: 'a-ext2',
+      sender: 'assistant',
+      parent_message_uuid: 'h-ext2',
+      content: [{ type: 'text', text: 'Other result.' }],
+    }
+    const body = makeHistory([taggedHuman, pairedAssistant, taggedHuman2, pairedAssistant2, realHuman, realAssistant])
+    const result = claudeAdapter.history!.filter(body) as { chat_messages: { uuid: string }[] }
+    expect(result.chat_messages).toHaveLength(2)
+    expect(result.chat_messages.map(m => m.uuid)).toEqual(['h-real', 'a-real'])
+  })
+
+  it('overrides current_leaf_message_uuid when it points to a stripped message', () => {
+    const body = makeHistory([realHuman, realAssistant, taggedHuman, pairedAssistant], 'a-ext')
+    const result = claudeAdapter.history!.filter(body, 'a-real') as { current_leaf_message_uuid: string }
+    expect(result.current_leaf_message_uuid).toBe('a-real')
+  })
+
+  it('leaves current_leaf_message_uuid when it points to a real message', () => {
+    const body = makeHistory([realHuman, realAssistant, taggedHuman, pairedAssistant], 'a-real')
+    const result = claudeAdapter.history!.filter(body, 'some-other-leaf') as { current_leaf_message_uuid: string }
+    expect(result.current_leaf_message_uuid).toBe('a-real')
+  })
+
+  it('leaves current_leaf_message_uuid unchanged when lastKnownRealLeaf is not available', () => {
+    const body = makeHistory([taggedHuman, pairedAssistant], 'a-ext')
+    const result = claudeAdapter.history!.filter(body, null) as { current_leaf_message_uuid: string }
+    expect(result.current_leaf_message_uuid).toBe('a-ext')
+  })
+
+  it('still strips recall from regular human message text', () => {
+    const body = makeHistory([{
+      uuid: 'h1',
+      sender: 'human',
+      content: [{ type: 'text', text: '<recall>\nSummary\n</recall>\n\nHello' }],
+    }])
+    const result = claudeAdapter.history!.filter(body) as { chat_messages: { content: { text: string }[] }[] }
+    expect(result.chat_messages[0].content[0].text).toBe('Hello')
+  })
+
+  it('does not add current_leaf_message_uuid when absent from source', () => {
+    const body = makeHistory([taggedHuman, pairedAssistant]) // no currentLeaf arg
+    const result = claudeAdapter.history!.filter(body) as Record<string, unknown>
+    expect('current_leaf_message_uuid' in result).toBe(false)
   })
 })
 

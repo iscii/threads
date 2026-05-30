@@ -114,4 +114,16 @@ describe('triggerSummarization', () => {
       summaryUpdatedAt: 1,
     })
   })
+
+  it('prefixes the summarization prompt with ext-marker', async () => {
+    const adapter = makeAdapter()
+    initSummary(adapter)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sse('{"block1":"updated summary"}')))
+
+    await triggerSummarization()
+
+    const fetchInit = vi.mocked(fetch).mock.calls[0][1] as RequestInit
+    const body = JSON.parse(fetchInit.body as string) as { prompt: string }
+    expect(body.prompt.startsWith('<x/>')).toBe(true)
+  })
 })

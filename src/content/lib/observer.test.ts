@@ -11,6 +11,8 @@ function makeAdapter(container: Element, overrides: Partial<DOMAdapter> = {}): D
     findBlocks: (turn) => Array.from(turn.querySelectorAll('p.thr-blk')),
     findInput: () => null,
     findHeader: () => null,
+    findChatContainer: () => null,
+    findHeaderActions: () => null,
     ...overrides,
   }
 }
@@ -270,5 +272,67 @@ describe('navigation', () => {
 
     expect(onBlocksFound).toHaveBeenCalledTimes(2)
     expect(onBlocksFound.mock.calls[1][0][0].text).toBe('New turn')
+  })
+})
+
+describe('tagged turn removal', () => {
+  it('removes a complete turn containing the ext marker on init scan', () => {
+    const container = document.createElement('div')
+    const turn = makeTurn(false, ['<x/>\nSummarize this.'])
+    container.appendChild(turn)
+    document.body.appendChild(container)
+
+    const onBlocksFound = vi.fn()
+    const obs = createObserver(
+      makeAdapter(container),
+      { onBlocksFound, onConversationChanged: vi.fn() },
+      () => {},
+    )
+    obs.start()
+
+    expect(onBlocksFound).not.toHaveBeenCalled()
+    expect(document.contains(turn)).toBe(false)
+  })
+
+  it('removes a tagged turn added via childList mutation without instrumenting it', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+
+    const onBlocksFound = vi.fn()
+    const obs = createObserver(
+      makeAdapter(container),
+      { onBlocksFound, onConversationChanged: vi.fn() },
+      () => {},
+    )
+    obs.start()
+
+    const turn = makeTurn(false, ['<x/>\nSummarize this.'])
+    container.appendChild(turn)
+    await Promise.resolve()
+
+    expect(onBlocksFound).not.toHaveBeenCalled()
+    expect(document.contains(turn)).toBe(false)
+  })
+
+  it('removes a tagged turn when data-is-streaming flips to false', async () => {
+    const container = document.createElement('div')
+    const turn = makeTurn(true, ['<x/>\nSummarize this.'])
+    container.appendChild(turn)
+    document.body.appendChild(container)
+
+    const onBlocksFound = vi.fn()
+    const obs = createObserver(
+      makeAdapter(container),
+      { onBlocksFound, onConversationChanged: vi.fn() },
+      () => {},
+    )
+    obs.start()
+    expect(onBlocksFound).not.toHaveBeenCalled()
+
+    turn.setAttribute('data-is-streaming', 'false')
+    await Promise.resolve()
+
+    expect(onBlocksFound).not.toHaveBeenCalled()
+    expect(document.contains(turn)).toBe(false)
   })
 })

@@ -188,7 +188,7 @@ describe('injection pipeline', () => {
 
   it('injects summaries and emits summaryInjected when buffer has summaries', async () => {
     const modifiedBody = {
-      messages: [{ role: 'user', content: '<threads-context>\nSummary\n</threads-context>\n\nHello' }],
+      messages: [{ role: 'user', content: '<recall>\nSummary\n</recall>\n\nHello' }],
     }
     const originalFetch = vi.fn().mockResolvedValue(makeResponse())
     const adapter = makeAdapter()
@@ -306,7 +306,7 @@ describe('stream monitoring', () => {
 
   it('emits streamComplete even when summaries were injected', async () => {
     const modifiedBody = {
-      messages: [{ role: 'user', content: '<threads-context>\nSummary\n</threads-context>\n\nHello' }],
+      messages: [{ role: 'user', content: '<recall>\nSummary\n</recall>\n\nHello' }],
     }
     const originalFetch = vi.fn().mockResolvedValue(makeResponse())
     const adapter = makeAdapter()
@@ -399,7 +399,7 @@ describe('history filtering', () => {
     const rawBody = {
       chat_messages: [{
         sender: 'human',
-        content: [{ type: 'text', text: '<threads-context>\nSummary\n</threads-context>\n\nHello' }],
+        content: [{ type: 'text', text: '<recall>\nSummary\n</recall>\n\nHello' }],
       }],
     }
     const filteredBody = {
@@ -424,7 +424,7 @@ describe('history filtering', () => {
     const response = await interceptFetch(HISTORY_URL, { method: 'GET' })
     const json = await response.json()
 
-    expect(filter).toHaveBeenCalledWith(rawBody)
+    expect(filter).toHaveBeenCalledWith(rawBody, null)
     expect(json).toEqual(filteredBody)
   })
 
@@ -486,5 +486,167 @@ describe('history filtering', () => {
     await interceptFetch(HISTORY_URL, { method: 'GET' })
 
     expect(originalFetch).toHaveBeenCalledWith(HISTORY_URL, { method: 'GET' })
+  })
+})
+
+describe('lastKnownRealLeaf tracking', () => {
+  const HISTORY_URL = 'https://claude.ai/api/organizations/org1/chat_conversations/conv1?tree=True'
+  const MESSAGE_START_SSE = [
+    'data: {"type":"message_start","message":{"uuid":"real-leaf-uuid"}}',
+    '',
+    'data: [DONE]',
+    '',
+  ].join('\n')
+
+  it('passes lastKnownRealLeaf to history.filter after non-extension POST', async () => {
+    const originalFetch = vi.fn()
+      .mockResolvedValueOnce(makeResponse(makeStream(MESSAGE_START_SSE)))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ chat_messages: [] }), { status: 200 }))
+    const filter = vi.fn((body: unknown) => body)
+    const adapter = {
+      ...makeAdapter(),
+      history: {
+        urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
+        filter,
+      },
+    }
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+    const messages = collectMessages()
+
+    const postResponse = await interceptFetch(COMPLETION_URL, {
+      method: 'POST',
+      body: JSON.stringify({ prompt: 'Hello' }), // no marker
+    })
+    await postResponse.text()
+
+    await vi.waitFor(() => {
+      expect(messages.get().find(m => m.type === MSG_TYPES.streamComplete)).toBeDefined()
+    }, { timeout: 200 })
+
+    await interceptFetch(HISTORY_URL, { method: 'GET' })
+
+    expect(filter).toHaveBeenCalledWith(expect.anything(), 'real-leaf-uuid')
+    messages.cleanup()
+  })
+
+  it('does NOT update lastKnownRealLeaf for extension requests', async () => {
+    const originalFetch = vi.fn()
+      .mockResolvedValueOnce(makeResponse(makeStream(MESSAGE_START_SSE)))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ chat_messages: [] }), { status: 200 }))
+    const filter = vi.fn((body: unknown) => body)
+    const adapter = {
+      ...makeAdapter(),
+      history: {
+        urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
+        filter,
+      },
+    }
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+    const messages = collectMessages()
+
+    // Extension POST — prompt starts with marker
+    const extBody = JSON.stringify({ prompt: '<x/>\nSummarize.' })
+    const postResponse = await interceptFetch(COMPLETION_URL, { method: 'POST', body: extBody })
+    await postResponse.text()
+
+    await vi.waitFor(() => {
+      expect(messages.get().find(m => m.type === MSG_TYPES.streamComplete)).toBeDefined()
+    }, { timeout: 200 })
+
+    await interceptFetch(HISTORY_URL, { method: 'GET' })
+
+    expect(filter).toHaveBeenCalledWith(expect.anything(), null)
+    messages.cleanup()
+  })
+
+  it('retains lastKnownRealLeaf across requests — extension POST does not clobber it', async () => {
+    const realSSE = [
+      'data: {"type":"message_start","message":{"uuid":"real-leaf"}}',
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n')
+    const extSSE = [
+      'data: {"type":"message_start","message":{"uuid":"ext-leaf"}}',
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n')
+
+    const originalFetch = vi.fn()
+      .mockResolvedValueOnce(makeResponse(makeStream(realSSE)))   // real POST
+      .mockResolvedValueOnce(makeResponse(makeStream(extSSE)))    // extension POST
+      .mockResolvedValueOnce(new Response(JSON.stringify({ chat_messages: [] }), { status: 200 })) // GET
+    const filter = vi.fn((body: unknown) => body)
+    const adapter = {
+      ...makeAdapter(),
+      history: {
+        urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
+        filter,
+      },
+    }
+    const { interceptFetch } = createFetchWatcher(adapter, originalFetch)
+    const messages = collectMessages()
+
+    // Real POST
+    const r1 = await interceptFetch(COMPLETION_URL, { method: 'POST', body: JSON.stringify({ prompt: 'Hello' }) })
+    await r1.text()
+    await vi.waitFor(() => {
+      expect(messages.get().filter(m => m.type === MSG_TYPES.streamComplete).length).toBeGreaterThanOrEqual(1)
+    }, { timeout: 200 })
+
+    // Extension POST
+    const r2 = await interceptFetch(COMPLETION_URL, { method: 'POST', body: JSON.stringify({ prompt: '<x/>\nSummarize.' }) })
+    await r2.text()
+    await vi.waitFor(() => {
+      expect(messages.get().filter(m => m.type === MSG_TYPES.streamComplete).length).toBeGreaterThanOrEqual(2)
+    }, { timeout: 200 })
+
+    // GET — filter should still see the real leaf, not the extension leaf
+    await interceptFetch(HISTORY_URL, { method: 'GET' })
+
+    expect(filter).toHaveBeenCalledWith(expect.anything(), 'real-leaf')
+    messages.cleanup()
+  })
+
+  it('resets lastKnownRealLeaf to null on resetLeaf call', async () => {
+    const realSSE = [
+      'data: {"type":"message_start","message":{"uuid":"conv-a-leaf"}}',
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n')
+    const originalFetch = vi.fn()
+      .mockResolvedValueOnce(makeResponse(makeStream(realSSE)))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ chat_messages: [] }), { status: 200 }))
+    const filter = vi.fn((body: unknown) => body)
+    const adapter = {
+      ...makeAdapter(),
+      history: {
+        urlPattern: /\/api\/organizations\/[^/]+\/chat_conversations\/[^/?]+/,
+        filter,
+      },
+    }
+    const { interceptFetch, resetLeaf } = createFetchWatcher(adapter, originalFetch)
+    const messages = collectMessages()
+
+    // Establish a known real leaf
+    const postResponse = await interceptFetch(COMPLETION_URL, {
+      method: 'POST',
+      body: JSON.stringify({ prompt: 'Hello' }),
+    })
+    await postResponse.text()
+    await vi.waitFor(() => {
+      expect(messages.get().find(m => m.type === MSG_TYPES.streamComplete)).toBeDefined()
+    }, { timeout: 200 })
+
+    // Simulate SPA navigation
+    resetLeaf()
+
+    // GET after navigation — lastKnownRealLeaf should be null
+    await interceptFetch(HISTORY_URL, { method: 'GET' })
+
+    expect(filter).toHaveBeenCalledWith(expect.anything(), null)
+    messages.cleanup()
   })
 })
