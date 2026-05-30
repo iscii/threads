@@ -278,7 +278,7 @@ describe('navigation', () => {
 describe('tagged turn removal', () => {
   it('removes a complete turn containing the ext marker on init scan', () => {
     const container = document.createElement('div')
-    const turn = makeTurn(false, ['<threads-ext-marker/>\nSummarize this.'])
+    const turn = makeTurn(false, ['<x/>\nSummarize this.'])
     container.appendChild(turn)
     document.body.appendChild(container)
 
@@ -306,7 +306,7 @@ describe('tagged turn removal', () => {
     )
     obs.start()
 
-    const turn = makeTurn(false, ['<threads-ext-marker/>\nSummarize this.'])
+    const turn = makeTurn(false, ['<x/>\nSummarize this.'])
     container.appendChild(turn)
     await Promise.resolve()
 
@@ -316,7 +316,7 @@ describe('tagged turn removal', () => {
 
   it('removes a tagged turn when data-is-streaming flips to false', async () => {
     const container = document.createElement('div')
-    const turn = makeTurn(true, ['<threads-ext-marker/>\nSummarize this.'])
+    const turn = makeTurn(true, ['<x/>\nSummarize this.'])
     container.appendChild(turn)
     document.body.appendChild(container)
 

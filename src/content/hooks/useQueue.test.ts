@@ -64,7 +64,7 @@ beforeEach(() => {
 })
 
 describe('sendThreadReply', () => {
-  it('prefixes prompt with threads-ext-marker', async () => {
+  it('prefixes prompt with ext-marker', async () => {
     const adapter = makeAdapter()
     initQueue(adapter)
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sse('The answer.')))
@@ -73,7 +73,7 @@ describe('sendThreadReply', () => {
 
     expect(adapter.buildCompletion).toHaveBeenCalledWith(
       expect.anything(),
-      expect.stringMatching(/^<threads-ext-marker\/>[\s\S]*concise assistant/),
+      expect.stringMatching(/^<x\/>[\s\S]*concise assistant/),
     )
   })
 })

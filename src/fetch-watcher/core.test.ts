@@ -188,7 +188,7 @@ describe('injection pipeline', () => {
 
   it('injects summaries and emits summaryInjected when buffer has summaries', async () => {
     const modifiedBody = {
-      messages: [{ role: 'user', content: '<threads-context>\nSummary\n</threads-context>\n\nHello' }],
+      messages: [{ role: 'user', content: '<recall>\nSummary\n</recall>\n\nHello' }],
     }
     const originalFetch = vi.fn().mockResolvedValue(makeResponse())
     const adapter = makeAdapter()
@@ -306,7 +306,7 @@ describe('stream monitoring', () => {
 
   it('emits streamComplete even when summaries were injected', async () => {
     const modifiedBody = {
-      messages: [{ role: 'user', content: '<threads-context>\nSummary\n</threads-context>\n\nHello' }],
+      messages: [{ role: 'user', content: '<recall>\nSummary\n</recall>\n\nHello' }],
     }
     const originalFetch = vi.fn().mockResolvedValue(makeResponse())
     const adapter = makeAdapter()
@@ -399,7 +399,7 @@ describe('history filtering', () => {
     const rawBody = {
       chat_messages: [{
         sender: 'human',
-        content: [{ type: 'text', text: '<threads-context>\nSummary\n</threads-context>\n\nHello' }],
+        content: [{ type: 'text', text: '<recall>\nSummary\n</recall>\n\nHello' }],
       }],
     }
     const filteredBody = {
@@ -545,7 +545,7 @@ describe('lastKnownRealLeaf tracking', () => {
     const messages = collectMessages()
 
     // Extension POST — prompt starts with marker
-    const extBody = JSON.stringify({ prompt: '<threads-ext-marker/>\nSummarize.' })
+    const extBody = JSON.stringify({ prompt: '<x/>\nSummarize.' })
     const postResponse = await interceptFetch(COMPLETION_URL, { method: 'POST', body: extBody })
     await postResponse.text()
 
@@ -596,7 +596,7 @@ describe('lastKnownRealLeaf tracking', () => {
     }, { timeout: 200 })
 
     // Extension POST
-    const r2 = await interceptFetch(COMPLETION_URL, { method: 'POST', body: JSON.stringify({ prompt: '<threads-ext-marker/>\nSummarize.' }) })
+    const r2 = await interceptFetch(COMPLETION_URL, { method: 'POST', body: JSON.stringify({ prompt: '<x/>\nSummarize.' }) })
     await r2.text()
     await vi.waitFor(() => {
       expect(messages.get().filter(m => m.type === MSG_TYPES.streamComplete).length).toBeGreaterThanOrEqual(2)

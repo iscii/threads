@@ -35,15 +35,15 @@ describe('history.urlPattern', () => {
 })
 
 describe('inject', () => {
-  it('prepends threads-context block to prompt', () => {
+  it('prepends recall block to prompt', () => {
     const result = claudeAdapter.inject({ prompt: 'Hello', model: 'claude-sonnet-4-6' }, ['Prior context'])
     expect(result.injected).toBe(true)
-    expect((result.body as any).prompt).toBe('<threads-context>\nPrior context\n</threads-context>\n\nHello')
+    expect((result.body as any).prompt).toBe('<recall>\nPrior context\n</recall>\n\nHello')
   })
 
   it('joins multiple summaries with newlines inside context block', () => {
     const result = claudeAdapter.inject({ prompt: 'Hello' }, ['Summary 1', 'Summary 2'])
-    expect((result.body as any).prompt).toBe('<threads-context>\nSummary 1\nSummary 2\n</threads-context>\n\nHello')
+    expect((result.body as any).prompt).toBe('<recall>\nSummary 1\nSummary 2\n</recall>\n\nHello')
   })
 
   it('preserves all other fields', () => {
@@ -82,11 +82,11 @@ describe('inject', () => {
 })
 
 describe('history.filter', () => {
-  it('strips injected threads-context block from human message text', () => {
+  it('strips injected recall block from human message text', () => {
     const body = {
       chat_messages: [{
         sender: 'human',
-        content: [{ type: 'text', text: '<threads-context>\nSummary\n</threads-context>\n\nHello' }],
+        content: [{ type: 'text', text: '<recall>\nSummary\n</recall>\n\nHello' }],
       }],
     }
     const result = claudeAdapter.history!.filter(body) as any
@@ -168,7 +168,7 @@ describe('history.filter (tagged message stripping)', () => {
   const taggedHuman = {
     uuid: 'h-ext',
     sender: 'human',
-    content: [{ type: 'text', text: '<threads-ext-marker/>\nSummarize this.' }],
+    content: [{ type: 'text', text: '<x/>\nSummarize this.' }],
   }
   const pairedAssistant = {
     uuid: 'a-ext',
@@ -206,7 +206,7 @@ describe('history.filter (tagged message stripping)', () => {
     const taggedHuman2 = {
       uuid: 'h-ext2',
       sender: 'human',
-      content: [{ type: 'text', text: '<threads-ext-marker/>\nOther prompt.' }],
+      content: [{ type: 'text', text: '<x/>\nOther prompt.' }],
     }
     const pairedAssistant2 = {
       uuid: 'a-ext2',
@@ -238,11 +238,11 @@ describe('history.filter (tagged message stripping)', () => {
     expect(result.current_leaf_message_uuid).toBe('a-ext')
   })
 
-  it('still strips threads-context from regular human message text', () => {
+  it('still strips recall from regular human message text', () => {
     const body = makeHistory([{
       uuid: 'h1',
       sender: 'human',
-      content: [{ type: 'text', text: '<threads-context>\nSummary\n</threads-context>\n\nHello' }],
+      content: [{ type: 'text', text: '<recall>\nSummary\n</recall>\n\nHello' }],
     }])
     const result = claudeAdapter.history!.filter(body) as { chat_messages: { content: { text: string }[] }[] }
     expect(result.chat_messages[0].content[0].text).toBe('Hello')
