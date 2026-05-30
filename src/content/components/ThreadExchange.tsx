@@ -114,7 +114,7 @@ export function ThreadExchange({
     return () => el.removeEventListener('scroll', onScroll)
   }, [])
 
-  // Autoscroll on response/streaming updates — only if already at bottom.
+  // Autoscroll when a message is added or the typing indicator changes — only if already at bottom.
   useEffect(() => {
     if (atBottomRef.current) scrollToBottom()
   }, [thread.messages.length, thread.isTyping])
