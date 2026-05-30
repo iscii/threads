@@ -145,7 +145,11 @@ export function ThreadExchange({
       <ThreadInput
         thread={thread}
         inputRef={inputRef}
-        onSubmitScroll={scrollToBottom}
+        onSubmitScroll={() => {
+          scrollToBottom()
+          atBottomRef.current = true
+          setAtBottom(true)
+        }}
       />
     </div>
   )
