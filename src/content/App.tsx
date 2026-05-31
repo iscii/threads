@@ -37,6 +37,7 @@ export function App({ coordinator, domAdapter }: AppProps) {
     <>
       {openThreads.value.map(t => {
         const top = coordinator.getBlockTop(t.blockId)
+        const maxHeight = Math.max(120, window.innerHeight - top - 8)
         const isActive = activeId.value === t.id
         return (
           <Fragment key={t.id}>
@@ -45,7 +46,7 @@ export function App({ coordinator, domAdapter }: AppProps) {
               style={{ top: `${top}px` }}
               onMouseDown={e => { e.stopPropagation(); setActive(t.id) }}
             />
-            <ThreadPanel thread={t} top={top} />
+            <ThreadPanel thread={t} top={top} maxHeight={maxHeight} />
           </Fragment>
         )
       })}

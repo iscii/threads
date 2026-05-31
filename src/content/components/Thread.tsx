@@ -23,9 +23,10 @@ function CloseIcon() {
 interface ThreadPanelProps {
   thread: Thread
   top: number
+  maxHeight: number
 }
 
-export function ThreadPanel({ thread, top }: ThreadPanelProps) {
+export function ThreadPanel({ thread, top, maxHeight }: ThreadPanelProps) {
   const isActive = useComputed(() => activeId.value === thread.id)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -39,7 +40,7 @@ export function ThreadPanel({ thread, top }: ThreadPanelProps) {
     <div
       class="tp"
       data-active={String(isActive.value)}
-      style={{ top: `${top}px` }}
+      style={{ top: `${top}px`, maxHeight: `${maxHeight}px` }}
       onMouseDown={e => {
         e.stopPropagation()
         setActive(thread.id)
