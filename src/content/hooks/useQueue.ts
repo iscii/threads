@@ -45,9 +45,8 @@ export async function sendThreadReply(threadId: string, userText: string): Promi
   setTyping(threadId, true)
 
   const systemPrompt =
-    `You are a concise assistant in a threaded discussion. ` +
-    `Reply in 1–3 sentences. Do not repeat or quote the passage. ` +
-    `Passage: "${t.blockText}"`
+    `Please reply in 1–3 sentences, focused on this passage.\n` +
+    `"${t.blockText}"`
 
   const fresh = threads.value.find(th => th.id === threadId)
   const history = (fresh?.messages ?? [])

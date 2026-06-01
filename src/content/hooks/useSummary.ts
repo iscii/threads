@@ -44,10 +44,9 @@ function buildSummarizationPrompt(dirty: Thread[]): string {
 
   return [
     THR_EXT_MARKER,
-    'You are a summarization assistant. Given the thread of messages and an existing summary',
-    'return an updated one-sentence summary that captures the key topic and emphasizing new information from the new messages.',
-    'Please respond only with a valid JSON object.',
-    'Keys are thread IDs, values are one-sentence summaries. No preamble, no explanation.',
+    'Summarize the following conversation threads about selected passages.',
+    'For each thread, please return an updated one-sentence summary capturing the key topic, emphasizing new information from new_messages.',
+    'Respond only with a valid JSON object. Keys are thread IDs, values are one-sentence summaries. No preamble. Thank you.',
     '',
     ...blocks,
   ].join('\n')
