@@ -37,7 +37,8 @@ export function App({ coordinator, domAdapter }: AppProps) {
     <>
       {openThreads.value.map(t => {
         const top = coordinator.getBlockTop(t.blockId)
-        const maxHeight = Math.max(100, window.innerHeight - top - 64)
+        const maxHeight = Math.max(100, Math.min(340, window.innerHeight - top - 64))
+        console.log(maxHeight)
         const isActive = activeId.value === t.id
         return (
           <Fragment key={t.id}>

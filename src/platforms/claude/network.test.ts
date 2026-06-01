@@ -38,12 +38,12 @@ describe('inject', () => {
   it('prepends recall block to prompt', () => {
     const result = claudeAdapter.inject({ prompt: 'Hello', model: 'claude-sonnet-4-6' }, ['Prior context'])
     expect(result.injected).toBe(true)
-    expect((result.body as any).prompt).toBe('<recall>\n[Threads extension: context from a related conversation thread, added to help give more relevant responses.]\n\nPrior context\n</recall>\n\nHello')
+    expect((result.body as any).prompt).toBe('<recall>\nContext from a related conversation thread: \n\nPrior context\n</recall>\n\nHello')
   })
 
   it('joins multiple summaries with newlines inside context block', () => {
     const result = claudeAdapter.inject({ prompt: 'Hello' }, ['Summary 1', 'Summary 2'])
-    expect((result.body as any).prompt).toBe('<recall>\n[Threads extension: context from a related conversation thread, added to help give more relevant responses.]\n\nSummary 1\nSummary 2\n</recall>\n\nHello')
+    expect((result.body as any).prompt).toBe('<recall>\nContext from a related conversation thread: \n\nSummary 1\nSummary 2\n</recall>\n\nHello')
   })
 
   it('preserves all other fields', () => {

@@ -47,7 +47,7 @@ export const claudeAdapter: NetworkAdapter = {
   inject(body: unknown, summaries: string[]): { body: unknown; injected: boolean } {
     if (!isPromptBody(body)) return { body, injected: false }
 
-    const prefix = `<${THR_CONTEXT_TAG}>\n[Threads extension: context from a related conversation thread, added to help give more relevant responses.]\n\n${summaries.join('\n')}\n</${THR_CONTEXT_TAG}>\n\n`
+    const prefix = `<${THR_CONTEXT_TAG}>\nContext from a related conversation thread: \n\n${summaries.join('\n')}\n</${THR_CONTEXT_TAG}>\n\n`
     return {
       body: {
         ...body,

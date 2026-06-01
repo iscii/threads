@@ -73,7 +73,7 @@ describe('sendThreadReply', () => {
 
     expect(adapter.buildCompletion).toHaveBeenCalledWith(
       expect.anything(),
-      expect.stringMatching(/^<x\/>[\s\S]*Threads extension/),
+      expect.stringMatching(/^<x\/>[\s\S]*Please reply in 1/),
     )
   })
 })
