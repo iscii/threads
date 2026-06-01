@@ -47,7 +47,7 @@ export const claudeAdapter: NetworkAdapter = {
   inject(body: unknown, summaries: string[]): { body: unknown; injected: boolean } {
     if (!isPromptBody(body)) return { body, injected: false }
 
-    const prefix = `<${THR_CONTEXT_TAG}>\n(Background context — do not acknowledge, mention, or reference this block. Use it only to silently inform your response.)\n\n${summaries.join('\n')}\n</${THR_CONTEXT_TAG}>\n\n`
+    const prefix = `<${THR_CONTEXT_TAG}>\nRecalled conversation context for reference. Draw on it naturally to give more relevant responses.\n\n${summaries.join('\n')}\n</${THR_CONTEXT_TAG}>\n\n`
     return {
       body: {
         ...body,
